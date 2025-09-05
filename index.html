@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compufit Offertes Generator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Compufit Offertes Generator</h1>
+        </header>
+
+        <form id="quotationForm">
+            <!-- Company Information Section -->
+            <section class="form-section">
+                <h2>Klantgegevens</h2>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="companyName">Bedrijfsnaam:</label>
+                        <input type="text" id="companyName" name="companyName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="contactName">Contactpersoon:</label>
+                        <input type="text" id="contactName" name="contactName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="address">Adres:</label>
+                        <input type="text" id="address" name="address" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="postalCode">Postcode:</label>
+                        <input type="text" id="postalCode" name="postalCode" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="city">Plaats:</label>
+                        <input type="text" id="city" name="city" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="companyId">Bedrijfs-ID:</label>
+                        <input type="text" id="companyId" name="companyId" required>
+                    </div>
+                </div>
+            </section>
+
+            <!-- One-time Costs Section -->
+            <section class="form-section">
+                <h2>Eenmalige Bijdrage</h2>
+                <div class="costs-container">
+                    <div class="costs-header">
+                        <div>Materiaal/Service</div>
+                        <div>Aantal</div>
+                        <div>Prijs per stuk (€)</div>
+                        <div>Totaal (€)</div>
+                        <div>Actie</div>
+                    </div>
+                    <div id="oneTimeCosts">
+                        <div class="cost-row">
+                            <input type="text" class="material-name" placeholder="Materiaal/Service naam">
+                            <input type="number" class="quantity" placeholder="1" min="1" value="1">
+                            <input type="number" class="unit-price" placeholder="0.00" min="0" step="0.01">
+                            <input type="number" class="total-price" readonly>
+                            <button type="button" class="remove-row">×</button>
+                        </div>
+                    </div>
+                    <button type="button" id="addOneTimeRow" class="add-row-btn">+ Regel toevoegen</button>
+                    <div class="section-total">
+                        <strong>Totaal Eenmalige Bijdrage: €<span id="oneTimeTotal">0.00</span></strong>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Recurring Costs Section -->
+            <section class="form-section">
+                <h2>Jaarlijkse Bijdrage</h2>
+                <div class="costs-container">
+                    <div class="costs-header">
+                        <div>Materiaal/Service</div>
+                        <div>Aantal</div>
+                        <div>Prijs per stuk (€)</div>
+                        <div>Totaal (€)</div>
+                        <div>Actie</div>
+                    </div>
+                    <div id="recurringCosts">
+                        <div class="cost-row">
+                            <input type="text" class="material-name" placeholder="Materiaal/Service naam">
+                            <input type="number" class="quantity" placeholder="1" min="1" value="1">
+                            <input type="number" class="unit-price" placeholder="0.00" min="0" step="0.01">
+                            <input type="number" class="total-price" readonly>
+                            <button type="button" class="remove-row">×</button>
+                        </div>
+                    </div>
+                    <button type="button" id="addRecurringRow" class="add-row-btn">+ Regel toevoegen</button>
+                    <div class="section-total">
+                        <strong>Totaal Jaarlijkse Bijdrage: €<span id="recurringTotal">0.00</span></strong>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Total Section -->
+            <section class="form-section">
+                <div class="grand-total">
+                    <h2>Totaal Overzicht</h2>
+                    <div class="total-breakdown">
+                        <div class="total-line">
+                            <span>Eenmalige Bijdrage:</span>
+                            <span>€<span id="finalOneTimeTotal">0.00</span></span>
+                        </div>
+                        <div class="total-line">
+                            <span>Jaarlijkse Bijdrage:</span>
+                            <span>€<span id="finalRecurringTotal">0.00</span></span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Generate Button -->
+            <section class="form-section">
+                <button type="button" id="generatePDF" class="generate-btn">Genereer PDF Offerte</button>
+            </section>
+        </form>
+    </div>
+
+    <!-- Include required libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pizzip/3.1.4/pizzip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/docxtemplater/3.39.1/docxtemplater.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
