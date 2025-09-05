@@ -237,8 +237,8 @@ class UnifiedQuotationHandler(http.server.SimpleHTTPRequestHandler):
 def main():
     """Start the unified quotation server."""
     
-    # Use Railway's PORT environment variable if available, otherwise default to 8000
-    port = int(os.environ.get('PORT', 8000))
+    # Use Railway's PORT environment variable if available, otherwise default to 80
+    port = int(os.environ.get('PORT', 80))
     if len(sys.argv) > 1:
         port = int(sys.argv[1])
     
