@@ -13,6 +13,7 @@ import tempfile
 import shutil
 from urllib.parse import parse_qs, urlparse
 from datetime import datetime
+from docx2pdf import convert
 
 class UnifiedQuotationHandler(http.server.SimpleHTTPRequestHandler):
     
@@ -48,10 +49,11 @@ class UnifiedQuotationHandler(http.server.SimpleHTTPRequestHandler):
                     self.send_header('Content-Type', 'application/json')
                     self.end_headers()
                     
+                    pdf_filename = result['filename'].replace('.docx', '.pdf')
                     response = {
                         'success': True,
-                        'message': 'Quotation generated successfully',
-                        'filename': result['filename'],
+                        'message': 'Quotation generated successfully (will be converted to PDF)',
+                        'filename': pdf_filename,
                         'download_url': f'/download/{result["filename"]}'
                     }
                     self.wfile.write(json.dumps(response).encode())
@@ -71,19 +73,49 @@ class UnifiedQuotationHandler(http.server.SimpleHTTPRequestHandler):
             filename = self.path[10:]  # Remove '/download/' prefix
             if os.path.exists(filename) and filename.endswith('.docx'):
                 try:
+                    # Convert DOCX to PDF
+                    pdf_filename = filename.replace('.docx', '.pdf')
+                    print(f"🔄 Converting {filename} to PDF...")
+                    
+                    convert(filename, pdf_filename)
+                    print(f"✅ PDF created: {pdf_filename}")
+                    
+                    # Send PDF file
                     self.send_response(200)
-                    self.send_header('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-                    self.send_header('Content-Disposition', f'attachment; filename="{filename}"')
+                    self.send_header('Content-Type', 'application/pdf')
+                    self.send_header('Content-Disposition', f'attachment; filename="{pdf_filename}"')
                     self.end_headers()
                     
-                    with open(filename, 'rb') as f:
+                    with open(pdf_filename, 'rb') as f:
                         self.wfile.write(f.read())
                     
-                    print(f"📥 Downloaded: {filename}")
+                    print(f"📥 Downloaded: {pdf_filename}")
+                    
+                    # Clean up files after download
+                    try:
+                        os.remove(filename)  # Remove original DOCX
+                        os.remove(pdf_filename)  # Remove PDF after download
+                        print(f"🧹 Cleaned up temporary files")
+                    except Exception as cleanup_error:
+                        print(f"⚠️ Cleanup warning: {cleanup_error}")
                     
                 except Exception as e:
-                    print(f"❌ Download error: {e}")
-                    self.send_error(500, f"Download error: {str(e)}")
+                    print(f"❌ PDF conversion error: {e}")
+                    # Fallback to DOCX if PDF conversion fails
+                    try:
+                        self.send_response(200)
+                        self.send_header('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+                        self.send_header('Content-Disposition', f'attachment; filename="{filename}"')
+                        self.end_headers()
+                        
+                        with open(filename, 'rb') as f:
+                            self.wfile.write(f.read())
+                        
+                        print(f"📥 Downloaded (DOCX fallback): {filename}")
+                        
+                    except Exception as fallback_error:
+                        print(f"❌ Fallback download error: {fallback_error}")
+                        self.send_error(500, f"Download error: {str(fallback_error)}")
             else:
                 self.send_error(404, "File not found")
         else:
@@ -127,7 +159,8 @@ class UnifiedQuotationHandler(http.server.SimpleHTTPRequestHandler):
 def main():
     """Start the unified quotation server."""
     
-    port = 8000  # Single port for everything
+    # Use Railway's PORT environment variable if available, otherwise default to 8000
+    port = int(os.environ.get('PORT', 8000))
     if len(sys.argv) > 1:
         port = int(sys.argv[1])
     
@@ -159,12 +192,26 @@ def main():
         for file in missing_files:
             print(f"   - {file}")
     
-    try:
-        from docx import Document
-        print("✅ python-docx library found")
-    except ImportError:
-        print("❌ python-docx library not found!")
-        print("   Install it with: pip install python-docx")
+    # Check required dependencies
+    required_packages = [
+        ('docx', 'python-docx'),
+        ('docx2pdf', 'docx2pdf'),
+        ('lxml', 'lxml')
+    ]
+    
+    missing_packages = []
+    for package_name, pip_name in required_packages:
+        try:
+            __import__(package_name)
+            print(f"✅ {pip_name} library found")
+        except ImportError:
+            missing_packages.append(pip_name)
+            print(f"❌ {pip_name} library not found!")
+    
+    if missing_packages:
+        print(f"\n📦 Install missing packages with:")
+        print(f"   pip install {' '.join(missing_packages)}")
+        print(f"   or: pip install -r requirements.txt")
         return 1
     
     try:
@@ -174,7 +221,7 @@ def main():
             print(f"\n💡 This server handles both:")
             print(f"   📱 Web interface (HTML, CSS, JS)")
             print(f"   ⚙️  Quotation API (/generate-quotation)")
-            print(f"   📥 File downloads (/download/)")
+            print(f"   📥 File downloads (/download/) - Auto-converts DOCX to PDF")
             print(f"\n🛑 Press Ctrl+C to stop the server")
             
             httpd.serve_forever()
