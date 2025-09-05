@@ -168,8 +168,8 @@ class QuotationGenerator {
             button.disabled = true;
 
             try {
-                // Send data to the final quotation server for processing
-                const response = await fetch('http://localhost:8001/generate-quotation', {
+                // Send data to the unified server for processing
+                const response = await fetch('/generate-quotation', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -189,7 +189,7 @@ class QuotationGenerator {
                     // Trigger download
                     if (result.download_url) {
                         const downloadLink = document.createElement('a');
-                        downloadLink.href = `http://localhost:8001${result.download_url}`;
+                        downloadLink.href = result.download_url;
                         downloadLink.download = result.filename;
                         downloadLink.style.display = 'none';
                         document.body.appendChild(downloadLink);
