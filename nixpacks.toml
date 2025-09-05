@@ -1,15 +1,15 @@
 [phases.setup]
-nixPkgs = ['python311Full']
+nixPkgs = ['python311', 'python311Packages.pip', 'python311Packages.virtualenv']
 
 [phases.install]
 cmds = [
-  'python3 -m ensurepip --upgrade',
-  'python3 -m pip install --upgrade pip',
-  'python3 -m pip install -r requirements.txt'
+  'python3 -m venv /opt/venv',
+  '. /opt/venv/bin/activate && pip install --upgrade pip',
+  '. /opt/venv/bin/activate && pip install -r requirements.txt'
 ]
 
 [phases.build]
 cmds = ['echo "Build complete"']
 
 [start]
-cmd = 'python3 unified_server.py'
+cmd = '. /opt/venv/bin/activate && python3 unified_server.py'
