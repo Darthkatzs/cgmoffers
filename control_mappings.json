@@ -1,0 +1,196 @@
+{
+  "_comments": [
+    "This file maps Word controls to data fields or calculated values.",
+    "Each control can have a 'type' and 'value' or 'formula'.",
+    "Types: 'field' (direct form field), 'calculated' (computed), 'fixed' (static text), 'list' (formatted list)",
+    "Please review each control and specify what it should contain."
+  ],
+  
+  "controls": {
+    
+    "praktijk": {
+      "type": "field",
+      "value": "companyName",
+      "description": "Practice/company name"
+    },
+    
+    "companyName": {
+      "type": "field", 
+      "value": "companyName",
+      "description": "Company name"
+    },
+    
+    "naam": {
+      "type": "field",
+      "value": "contactName", 
+      "description": "Contact person name"
+    },
+    
+    "contactName": {
+      "type": "field",
+      "value": "contactName",
+      "description": "Contact person name"
+    },
+    
+    "adres": {
+      "type": "field",
+      "value": "address",
+      "description": "Address"
+    },
+    
+    "address": {
+      "type": "field",
+      "value": "address", 
+      "description": "Address"
+    },
+    
+    "postcode": {
+      "type": "field",
+      "value": "postalCode",
+      "description": "Postal code"
+    },
+    
+    "postalCode": {
+      "type": "field",
+      "value": "postalCode",
+      "description": "Postal code"
+    },
+    
+    "stad": {
+      "type": "field", 
+      "value": "city",
+      "description": "City"
+    },
+    
+    "city": {
+      "type": "field",
+      "value": "city",
+      "description": "City"
+    },
+    
+    "btw": {
+      "type": "field",
+      "value": "companyId",
+      "description": "Company VAT/ID number"
+    },
+    
+    "companyId": {
+      "type": "field",
+      "value": "companyId",
+      "description": "Company VAT/ID number"
+    },
+    
+    "date": {
+      "type": "calculated",
+      "formula": "current_date",
+      "description": "Current date"
+    },
+    
+    "items1": {
+      "type": "list",
+      "value": "oneTimeCosts",
+      "description": "List of one-time costs/items - there are fields within these fields. Module is the product name, aantal is the ammount, éénmalige setupkost is the material cost, calctotaalsetup is the ammount times the price"
+    },
+    
+    "items2": {
+      "type": "list", 
+      "value": "recurringCosts",
+      "description": "List of recurring costs/items - here are fields within these fields. Module is the product name, aantal is the ammount, jaarlijks is the material cost, calctotaaljaarlijks is the ammount times the price"
+    },
+    
+    "totaaleenmalig": {
+      "type": "calculated",
+      "formula": "sum_one_time_costs",
+      "description": "Total one-time costs - yes"
+    },
+    
+    "totaaljaarlijks": {
+      "type": "calculated", 
+      "formula": "sum_recurring_costs",
+      "description": "Total recurring costs - yes"
+    },
+    
+    "calctotaalsetup": {
+      "type": "calculated",
+      "formula": "ammounttimespriceonetimematerial",
+      "description": "Calculated total setup costs - this is part of Items1 and is the ammount times the price of the material line"
+    },
+    
+    "calctotaaljaarlijks": {
+      "type": "calculated",
+      "formula": "ammounttimespricerecurringmaterial",
+      "description": "Calculated total yearly costs - this is part of Itemd2 and is the ammount times the price of the material line"
+    },
+    
+    "total": {
+      "type": "calculated",
+      "formula": "recurringandonetimewithoutVAT",
+      "description": "total without vat"
+    },
+    
+    "vat": {
+      "type": "calculated",
+      "formula": "VAT",
+      "description": "21% vat of the total"
+    },
+    
+    "grandtotal": {
+      "type": "calculated", 
+      "formula": "grandtotal",
+      "description": "Grand total - total + vat"
+    },
+    
+    "beschrijving": {
+      "type": "input",
+      "value": "description",
+      "description": "a free description field for the offer"
+    },
+    
+    "Module": {
+      "type": "field",
+      "value": "modulenname",
+      "description": "the name of the line in the items table"
+    },
+    
+    "Aantal": {
+      "type": "field",
+      "value": "itemammount",
+      "description": "quantity of given material in items table"
+    },
+    
+    "éénmalige setupkost": {
+      "type": "calculated",
+      "value": "totalsetup",
+      "description": "total calculated one time costs"
+    },
+    
+    "Jaarlijks": {
+      "type": "field",
+      "value": "annualmaterialcost",
+      "description": "part of an items1 line the price entered into the material field."
+    },
+    
+    "Bedrijf": {
+      "type": "field",
+      "value": "companyName",
+      "description": "Company field - assuming same as company name"
+    },
+    
+    "Naam": {
+      "type": "field",
+      "value": "contactName", 
+      "description": "Name field - assuming same as contact name"
+    }
+  },
+  
+  "questions": [
+    "1. What format should items1 and items2 use? Line by line? Bullet points? Table format? ANSWER: This is in a table and this items1 and items2 should be multiple lines. There are fields in there as mentioned in the fields above here.",
+    "2. What should the 'total' field contain? Sum of all costs? Excl VAT? ANSWER: see ansswers above",
+    "3. What VAT percentage should be used and what is it calculated on? ANSWER: 21% of the total.",
+    "4. What should 'grandtotal' include? Total + VAT? ANSWER: Yes",
+    "5. What should go in 'beschrijving' (description)? ANSWER: free field to be added on the page",
+    "6. The Module/Aantal/setupkost/Jaarlijks fields appear multiple times - are these table rows for individual cost items? ANSWER: Those are part of the items1 and items2 and thus are differentiated in there.",
+    "7. Are there any other calculated fields I'm missing? ANSWER: No",
+    "8. Should any fields be left empty or have default values? ANSWER: no"
+  ]
+}

@@ -103,6 +103,7 @@ class QuotationGenerator {
             postalCode: document.getElementById('postalCode').value,
             city: document.getElementById('city').value,
             companyId: document.getElementById('companyId').value,
+            description: document.getElementById('description').value,
             date: new Date().toLocaleDateString('nl-NL'),
             oneTimeCosts: [],
             recurringCosts: []
@@ -160,58 +161,55 @@ class QuotationGenerator {
                 return;
             }
 
-            // Load the Word template from server
-            const templateResponse = await fetch('standaardofferte Compufit NL.docx');
-            if (!templateResponse.ok) {
-                throw new Error('Kan sjabloon niet laden van server');
+            // Show processing message
+            const button = document.getElementById('generatePDF');
+            const originalText = button.textContent;
+            button.textContent = 'Bezig met genereren...';
+            button.disabled = true;
+
+            try {
+                // Send data to the final quotation server for processing
+                const response = await fetch('http://localhost:8001/generate-quotation', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`Offerte succesvol gegenereerd! Bestand: ${result.filename}`);
+                    
+                    // Trigger download
+                    if (result.download_url) {
+                        const downloadLink = document.createElement('a');
+                        downloadLink.href = `http://localhost:8001${result.download_url}`;
+                        downloadLink.download = result.filename;
+                        downloadLink.style.display = 'none';
+                        document.body.appendChild(downloadLink);
+                        downloadLink.click();
+                        document.body.removeChild(downloadLink);
+                    }
+                    
+                } else {
+                    throw new Error(result.error || 'Unknown server error');
+                }
+
+            } finally {
+                // Restore button state
+                button.textContent = originalText;
+                button.disabled = false;
             }
-            
-            const templateContent = await templateResponse.arrayBuffer();
-            
-            // Process the template with docxtemplater
-            const zip = new PizZip(templateContent);
-            const doc = new window.docxtemplater(zip, {
-                paragraphLoop: true,
-                linebreaks: true,
-            });
-
-            // Calculate totals
-            const oneTimeTotal = formData.oneTimeCosts.reduce((sum, item) => sum + item.total, 0);
-            const recurringTotal = formData.recurringCosts.reduce((sum, item) => sum + item.total, 0);
-
-            // Prepare data for template
-            const templateData = {
-                companyName: formData.companyName,
-                contactName: formData.contactName,
-                fullAddress: `${formData.address}, ${formData.postalCode} ${formData.city}`,
-                companyId: formData.companyId,
-                date: formData.date,
-                oneTimeCosts: formData.oneTimeCosts,
-                recurringCosts: formData.recurringCosts,
-                oneTimeTotal: oneTimeTotal.toFixed(2),
-                recurringTotal: recurringTotal.toFixed(2),
-                hasOneTimeCosts: formData.oneTimeCosts.length > 0,
-                hasRecurringCosts: formData.recurringCosts.length > 0
-            };
-
-            // Render the document
-            doc.render(templateData);
-
-            // Generate the output
-            const output = doc.getZip().generate({
-                type: 'blob',
-                mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-            });
-
-            // Save the file
-            const fileName = `Offerte_${formData.companyName.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().getTime()}.docx`;
-            saveAs(output, fileName);
-
-            alert('Offerte succesvol gegenereerd! Het bestand is gedownload.');
 
         } catch (error) {
-            console.error('Error generating PDF:', error);
-            alert('Er is een fout opgetreden bij het genereren van de PDF. Controleer of het sjabloon beschikbaar is en probeer opnieuw.');
+            console.error('Error generating quotation:', error);
+            alert(`Er is een fout opgetreden bij het genereren van de offerte: ${error.message}`);
         }
     }
 }

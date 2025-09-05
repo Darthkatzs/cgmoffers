@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple HTML-based Quotation</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .header { text-align: center; margin-bottom: 40px; }
+        .company-info { margin-bottom: 30px; }
+        .costs-section { margin-bottom: 30px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .total { font-weight: bold; }
+        @media print { body { margin: 20px; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>OFFERTE</h1>
+        <p>Datum: <span id="currentDate"></span></p>
+    </div>
+
+    <div class="company-info">
+        <h2>Klantgegevens:</h2>
+        <div id="customerInfo">
+            <p><strong>Bedrijf:</strong> <span id="companyName"></span></p>
+            <p><strong>Contactpersoon:</strong> <span id="contactName"></span></p>
+            <p><strong>Adres:</strong> <span id="address"></span></p>
+            <p><strong>Postcode:</strong> <span id="postalCode"></span></p>
+            <p><strong>Plaats:</strong> <span id="city"></span></p>
+            <p><strong>Bedrijfs-ID:</strong> <span id="companyId"></span></p>
+        </div>
+    </div>
+
+    <div class="costs-section">
+        <h2>Eenmalige Kosten</h2>
+        <table id="oneTimeTable">
+            <thead>
+                <tr>
+                    <th>Materiaal/Service</th>
+                    <th>Aantal</th>
+                    <th>Prijs per stuk (€)</th>
+                    <th>Totaal (€)</th>
+                </tr>
+            </thead>
+            <tbody id="oneTimeBody">
+            </tbody>
+        </table>
+        <p class="total">Totaal Eenmalig: €<span id="oneTimeTotal">0.00</span></p>
+    </div>
+
+    <div class="costs-section">
+        <h2>Jaarlijkse Kosten</h2>
+        <table id="recurringTable">
+            <thead>
+                <tr>
+                    <th>Materiaal/Service</th>
+                    <th>Aantal</th>
+                    <th>Prijs per stuk (€)</th>
+                    <th>Totaal (€)</th>
+                </tr>
+            </thead>
+            <tbody id="recurringBody">
+            </tbody>
+        </table>
+        <p class="total">Totaal Jaarlijks: €<span id="recurringTotal">0.00</span></p>
+    </div>
+
+    <div style="margin-top: 50px;">
+        <h2>Met vriendelijke groet,</h2>
+        <p>Compufit</p>
+        <p>Datum: <span id="footerDate"></span></p>
+    </div>
+
+    <script>
+        // Simple JavaScript to populate the template
+        function populateQuotation(data) {
+            document.getElementById('currentDate').textContent = data.date;
+            document.getElementById('footerDate').textContent = data.date;
+            
+            document.getElementById('companyName').textContent = data.companyName;
+            document.getElementById('contactName').textContent = data.contactName;
+            document.getElementById('address').textContent = data.address;
+            document.getElementById('postalCode').textContent = data.postalCode;
+            document.getElementById('city').textContent = data.city;
+            document.getElementById('companyId').textContent = data.companyId;
+            
+            // One-time costs
+            const oneTimeBody = document.getElementById('oneTimeBody');
+            oneTimeBody.innerHTML = '';
+            let oneTimeTotal = 0;
+            
+            data.oneTimeCosts.forEach(item => {
+                const row = oneTimeBody.insertRow();
+                row.innerHTML = `
+                    <td>${item.material}</td>
+                    <td>${item.quantity}</td>
+                    <td>€${item.unitPrice.toFixed(2)}</td>
+                    <td>€${item.total.toFixed(2)}</td>
+                `;
+                oneTimeTotal += item.total;
+            });
+            
+            document.getElementById('oneTimeTotal').textContent = oneTimeTotal.toFixed(2);
+            
+            // Recurring costs
+            const recurringBody = document.getElementById('recurringBody');
+            recurringBody.innerHTML = '';
+            let recurringTotal = 0;
+            
+            data.recurringCosts.forEach(item => {
+                const row = recurringBody.insertRow();
+                row.innerHTML = `
+                    <td>${item.material}</td>
+                    <td>${item.quantity}</td>
+                    <td>€${item.unitPrice.toFixed(2)}</td>
+                    <td>€${item.total.toFixed(2)}</td>
+                `;
+                recurringTotal += item.total;
+            });
+            
+            document.getElementById('recurringTotal').textContent = recurringTotal.toFixed(2);
+        }
+        
+        // Example usage - this would be called by the main application
+        // populateQuotation(quotationData);
+    </script>
+</body>
+</html>
