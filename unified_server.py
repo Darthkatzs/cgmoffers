@@ -13,13 +13,6 @@ import tempfile
 import shutil
 from urllib.parse import parse_qs, urlparse
 from datetime import datetime
-from docx import Document
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter, A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib import colors
-from reportlab.lib.units import inch
 import io
 
 class UnifiedQuotationHandler(http.server.SimpleHTTPRequestHandler):
@@ -56,11 +49,10 @@ class UnifiedQuotationHandler(http.server.SimpleHTTPRequestHandler):
                     self.send_header('Content-Type', 'application/json')
                     self.end_headers()
                     
-                    pdf_filename = result['filename'].replace('.docx', '.pdf')
                     response = {
                         'success': True,
-                        'message': 'Quotation generated successfully (will be converted to PDF)',
-                        'filename': pdf_filename,
+                        'message': 'Quotation generated successfully',
+                        'filename': result['filename'],
                         'download_url': f'/download/{result["filename"]}'
                     }
                     self.wfile.write(json.dumps(response).encode())
@@ -80,125 +72,32 @@ class UnifiedQuotationHandler(http.server.SimpleHTTPRequestHandler):
             filename = self.path[10:]  # Remove '/download/' prefix
             if os.path.exists(filename) and filename.endswith('.docx'):
                 try:
-                    # Convert DOCX to PDF using cross-platform method
-                    pdf_filename = filename.replace('.docx', '.pdf')
-                    print(f"🔄 Converting {filename} to PDF...")
-                    
-                    # Convert DOCX to PDF using reportlab
-                    self.docx_to_pdf_reportlab(filename, pdf_filename)
-                    print(f"✅ PDF created: {pdf_filename}")
-                    
-                    # Send PDF file
+                    # Send DOCX file directly
                     self.send_response(200)
-                    self.send_header('Content-Type', 'application/pdf')
-                    self.send_header('Content-Disposition', f'attachment; filename="{pdf_filename}"')
+                    self.send_header('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+                    self.send_header('Content-Disposition', f'attachment; filename="{filename}"')
                     self.end_headers()
                     
-                    with open(pdf_filename, 'rb') as f:
+                    with open(filename, 'rb') as f:
                         self.wfile.write(f.read())
                     
-                    print(f"📥 Downloaded: {pdf_filename}")
+                    print(f"📥 Downloaded: {filename}")
                     
-                    # Clean up files after download
+                    # Clean up file after download
                     try:
-                        os.remove(filename)  # Remove original DOCX
-                        os.remove(pdf_filename)  # Remove PDF after download
-                        print(f"🧹 Cleaned up temporary files")
+                        os.remove(filename)
+                        print(f"🧹 Cleaned up temporary file")
                     except Exception as cleanup_error:
                         print(f"⚠️ Cleanup warning: {cleanup_error}")
                     
                 except Exception as e:
-                    print(f"❌ PDF conversion error: {e}")
-                    # Fallback to DOCX if PDF conversion fails
-                    try:
-                        self.send_response(200)
-                        self.send_header('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-                        self.send_header('Content-Disposition', f'attachment; filename="{filename}"')
-                        self.end_headers()
-                        
-                        with open(filename, 'rb') as f:
-                            self.wfile.write(f.read())
-                        
-                        print(f"📥 Downloaded (DOCX fallback): {filename}")
-                        
-                    except Exception as fallback_error:
-                        print(f"❌ Fallback download error: {fallback_error}")
-                        self.send_error(500, f"Download error: {str(fallback_error)}")
+                    print(f"❌ Download error: {e}")
+                    self.send_error(500, f"Download error: {str(e)}")
             else:
                 self.send_error(404, "File not found")
         else:
             # Handle static file serving (HTML, CSS, JS, etc.)
             super().do_GET()
-    
-    def docx_to_pdf_reportlab(self, docx_filename, pdf_filename):
-        """Convert DOCX to PDF using reportlab."""
-        try:
-            doc = Document(docx_filename)
-            
-            # Create PDF document
-            pdf_doc = SimpleDocTemplate(pdf_filename, pagesize=A4)
-            styles = getSampleStyleSheet()
-            story = []
-            
-            # Custom styles
-            title_style = ParagraphStyle(
-                'CustomTitle',
-                parent=styles['Heading1'],
-                fontSize=16,
-                spaceAfter=30,
-                textColor=colors.black
-            )
-            
-            normal_style = ParagraphStyle(
-                'CustomNormal',
-                parent=styles['Normal'],
-                fontSize=10,
-                spaceAfter=12,
-                textColor=colors.black
-            )
-            
-            # Process paragraphs
-            for paragraph in doc.paragraphs:
-                if paragraph.text.strip():
-                    # Check if paragraph contains bold text (likely a heading)
-                    if any(run.bold for run in paragraph.runs):
-                        story.append(Paragraph(paragraph.text, title_style))
-                    else:
-                        story.append(Paragraph(paragraph.text, normal_style))
-                    story.append(Spacer(1, 6))
-            
-            # Process tables
-            for table in doc.tables:
-                table_data = []
-                for row in table.rows:
-                    row_data = []
-                    for cell in row.cells:
-                        row_data.append(cell.text)
-                    table_data.append(row_data)
-                
-                if table_data:
-                    pdf_table = Table(table_data)
-                    pdf_table.setStyle(TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                        ('FONTSIZE', (0, 0), (-1, 0), 10),
-                        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                        ('FONTSIZE', (0, 1), (-1, -1), 9),
-                        ('GRID', (0, 0), (-1, -1), 1, colors.black)
-                    ]))
-                    story.append(pdf_table)
-                    story.append(Spacer(1, 12))
-            
-            # Build PDF
-            pdf_doc.build(story)
-            
-        except Exception as e:
-            print(f"❌ DOCX to PDF conversion error: {e}")
-            raise e
     
     def create_quotation_document(self, data):
         """Create a quotation document using XML processing for broken tags."""
@@ -273,7 +172,6 @@ def main():
     # Check required dependencies
     required_packages = [
         ('docx', 'python-docx'),
-        ('reportlab', 'reportlab'),
         ('lxml', 'lxml')
     ]
     
@@ -299,7 +197,7 @@ def main():
             print(f"\n💡 This server handles both:")
             print(f"   📱 Web interface (HTML, CSS, JS)")
             print(f"   ⚙️  Quotation API (/generate-quotation)")
-            print(f"   📥 File downloads (/download/) - Auto-converts DOCX to PDF")
+            print(f"   📥 File downloads (/download/) - DOCX format")
             print(f"\n🛑 Press Ctrl+C to stop the server")
             
             httpd.serve_forever()
