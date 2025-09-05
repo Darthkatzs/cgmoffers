@@ -13,9 +13,17 @@ A web-based application for generating professional quotations using Word templa
 ## Quick Start
 
 1. **Prepare your Word template** following the instructions in `TEMPLATE_SETUP.md`
-2. **Open** `index.html` in a web browser
-3. **Fill in** the quotation details
-4. **Generate** your professional quotation
+2. **Start the local server** (required for template loading):
+   - **Python**: `python3 server.py` or `python server.py`
+   - **Node.js**: `node serve.js`
+   - **Alternative**: Any HTTP server in the project directory
+3. **Open** your browser to `http://localhost:8000`
+4. **Fill in** the quotation details
+5. **Generate** your professional quotation
+
+### Why use a server?
+
+The application needs to load the Word template file, which requires a local server due to browser security restrictions. You can't open `index.html` directly in your browser - it must be served through HTTP.
 
 ## File Structure
 
@@ -24,6 +32,8 @@ cgmoffers/
 ├── index.html              # Main application page
 ├── style.css               # Application styles
 ├── script.js               # Application functionality
+├── server.py               # Python HTTP server
+├── serve.js                # Node.js HTTP server
 ├── TEMPLATE_SETUP.md       # Word template preparation guide
 ├── standaardofferte Compufit NL.docx  # Word template
 └── README.md               # This file
@@ -71,8 +81,18 @@ The application uses these external libraries via CDN:
 
 1. Clone this repository
 2. Follow the template setup instructions in `TEMPLATE_SETUP.md`
-3. Open `index.html` in a web browser
-4. Start creating quotations!
+3. Start a local server:
+   ```bash
+   # Using Python (most systems have this)
+   python3 server.py
+   
+   # Or using Node.js (if you have it installed)
+   node serve.js
+   
+   # Or any other HTTP server in the project directory
+   ```
+4. Open `http://localhost:8000` in your browser
+5. Start creating quotations!
 
 ## License
 

@@ -160,10 +160,10 @@ class QuotationGenerator {
                 return;
             }
 
-            // Load the Word template
+            // Load the Word template from server
             const templateResponse = await fetch('standaardofferte Compufit NL.docx');
             if (!templateResponse.ok) {
-                throw new Error('Kan sjabloon niet laden');
+                throw new Error('Kan sjabloon niet laden van server');
             }
             
             const templateContent = await templateResponse.arrayBuffer();
