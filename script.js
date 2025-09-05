@@ -169,7 +169,7 @@ class QuotationGenerator {
             const templateContent = await templateResponse.arrayBuffer();
             
             // Process the template with docxtemplater
-            const zip = await JSZip.loadAsync(templateContent);
+            const zip = new PizZip(templateContent);
             const doc = new window.docxtemplater(zip, {
                 paragraphLoop: true,
                 linebreaks: true,

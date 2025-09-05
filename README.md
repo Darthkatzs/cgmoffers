@@ -35,7 +35,7 @@ cgmoffers/
 ├── server.py               # Python HTTP server
 ├── serve.js                # Node.js HTTP server
 ├── libs/                   # JavaScript libraries
-│   ├── jszip.min.js        # ZIP file handling
+│   ├── pizzip.min.js       # ZIP file handling (PizZip)
 │   ├── docxtemplater.min.js # Word document templating
 │   └── FileSaver.min.js    # File download functionality
 ├── TEMPLATE_SETUP.md       # Word template preparation guide
@@ -77,7 +77,7 @@ The application uses these template variables in your Word document:
 ## Dependencies
 
 The application includes these JavaScript libraries locally:
-- [JSZip](https://github.com/Stuk/jszip) - ZIP file handling for Word documents
+- [PizZip](https://github.com/open-xml-templating/pizzip) - ZIP file handling compatible with docxtemplater
 - [docxtemplater](https://docxtemplater.com/) - Word document templating engine
 - [FileSaver.js](https://github.com/eligrey/FileSaver.js) - Client-side file download
 
