@@ -229,11 +229,13 @@ class QuotationGenerator {
             cursor: pointer;
             margin: 10px 0;
             font-size: 14px;
+            display: block;
+            width: 200px;
         `;
         
-        // Insert after the form title
-        const form = document.querySelector('form');
-        form.insertBefore(autoFillButton, form.firstChild);
+        // Insert right after the header
+        const header = document.querySelector('header');
+        header.insertAdjacentElement('afterend', autoFillButton);
         
         autoFillButton.addEventListener('click', () => {
             this.fillTestData();
