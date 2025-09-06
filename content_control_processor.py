@@ -162,28 +162,29 @@ class ContentControlProcessor:
                                 # Find the content part of the SDT and update it
                                 sdt_content = sdt.find(f'{w_ns}sdtContent')
                                 if sdt_content is not None:
-                                    # Clear all existing text content and replace with new value
-                                    text_elements = []
-                                    for t in sdt_content.iter(f'{w_ns}t'):
-                                        text_elements.append(t)
+                                    # Prepare lines (support multi-line values)
+                                    lines = str(replacement_value).split('\n')
                                     
-                                    if text_elements:
-                                        # Clear all text elements
-                                        for t in text_elements:
-                                            t.text = ""
-                                        
-                                        # Set the first one to our replacement value
-                                        text_elements[0].text = str(replacement_value)
-                                        changes_made += 1
-                                        print(f"      ✅ Updated control '{control_name}' (instance {instance_num}) -> '{replacement_value}'")
-                                    else:
-                                        # No text elements found, create new ones
-                                        new_p = ET.SubElement(sdt_content, f'{w_ns}p')
-                                        new_r = ET.SubElement(new_p, f'{w_ns}r')
-                                        new_t = ET.SubElement(new_r, f'{w_ns}t')
-                                        new_t.text = str(replacement_value)
-                                        changes_made += 1
-                                        print(f"      ✅ Created new content for '{control_name}' (instance {instance_num}) -> '{replacement_value}'")
+                                    # Remove all existing children to rebuild cleanly with line breaks
+                                    for child in list(sdt_content):
+                                        sdt_content.remove(child)
+                                    
+                                    # Create one paragraph containing runs with <w:br/> between lines
+                                    p = ET.SubElement(sdt_content, f'{w_ns}p')
+                                    for i, part in enumerate(lines):
+                                        # Add text run
+                                        r = ET.SubElement(p, f'{w_ns}r')
+                                        t = ET.SubElement(r, f'{w_ns}t')
+                                        # Preserve spaces/newlines
+                                        t.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+                                        t.text = part
+                                        # Add explicit line break between parts (except after last)
+                                        if i < len(lines) - 1:
+                                            br_run = ET.SubElement(p, f'{w_ns}r')
+                                            ET.SubElement(br_run, f'{w_ns}br')
+                                    
+                                    changes_made += 1
+                                    print(f"      ✅ Updated control '{control_name}' (instance {instance_num}) -> '{replacement_value}'")
                 
                 except Exception as e:
                     print(f"      ⚠️  Error processing SDT: {e}")
@@ -214,49 +215,23 @@ class ContentControlProcessor:
         
         # Handle table fields that need context-aware values
         if control_name == 'Module':
+            # Join items per section so multiple lines appear in one cell
             if instance_num == 1:
-                # First instance: use one-time costs
-                one_time_costs = data.get('oneTimeCosts', [])
-                if one_time_costs and len(one_time_costs) >= 1:
-                    return one_time_costs[0].get('material', '')
+                names = [str(i.get('material', '')) for i in data.get('oneTimeCosts', [])]
+                return "\n".join(filter(None, names))
             elif instance_num == 2:
-                # Second instance: check if there's a second one-time cost item
-                one_time_costs = data.get('oneTimeCosts', [])
-                if one_time_costs and len(one_time_costs) >= 2:
-                    return one_time_costs[1].get('material', '')
-            elif instance_num == 3:
-                # Third instance: use recurring costs
-                recurring_costs = data.get('recurringCosts', [])
-                if recurring_costs and len(recurring_costs) >= 1:
-                    return recurring_costs[0].get('material', '')
-            elif instance_num == 4:
-                # Fourth instance: check if there's a second recurring cost item
-                recurring_costs = data.get('recurringCosts', [])
-                if recurring_costs and len(recurring_costs) >= 2:
-                    return recurring_costs[1].get('material', '')
+                names = [str(i.get('material', '')) for i in data.get('recurringCosts', [])]
+                return "\n".join(filter(None, names))
             return ''
             
         elif control_name == 'Aantal':
+            # Join quantities per section so multiple lines appear
             if instance_num == 1:
-                # First instance: first one-time cost item
-                one_time_costs = data.get('oneTimeCosts', [])
-                if one_time_costs and len(one_time_costs) >= 1:
-                    return str(one_time_costs[0].get('quantity', ''))
+                qtys = [str(i.get('quantity', '')) for i in data.get('oneTimeCosts', [])]
+                return "\n".join(filter(None, qtys))
             elif instance_num == 2:
-                # Second instance: second one-time cost item
-                one_time_costs = data.get('oneTimeCosts', [])
-                if one_time_costs and len(one_time_costs) >= 2:
-                    return str(one_time_costs[1].get('quantity', ''))
-            elif instance_num == 3:
-                # Third instance: first recurring cost item
-                recurring_costs = data.get('recurringCosts', [])
-                if recurring_costs and len(recurring_costs) >= 1:
-                    return str(recurring_costs[0].get('quantity', ''))
-            elif instance_num == 4:
-                # Fourth instance: second recurring cost item
-                recurring_costs = data.get('recurringCosts', [])
-                if recurring_costs and len(recurring_costs) >= 2:
-                    return str(recurring_costs[1].get('quantity', ''))
+                qtys = [str(i.get('quantity', '')) for i in data.get('recurringCosts', [])]
+                return "\n".join(filter(None, qtys))
             return ''
             
         # Handle price and calculated fields with multiple item support  
@@ -264,64 +239,38 @@ class ContentControlProcessor:
             # Unit prices for one-time costs
             one_time_costs = data.get('oneTimeCosts', [])
             if one_time_costs:
-                if len(one_time_costs) == 1:
-                    return f"€{one_time_costs[0].get('unitPrice', 0):.2f}"
-                else:
-                    items = []
-                    for item in one_time_costs[:5]:
-                        items.append(f"• €{item.get('unitPrice', 0):.2f}")
-                    if len(one_time_costs) > 5:
-                        items.append("• ...")
-                    return "\n".join(items)
+                items = [f"€{item.get('unitPrice', 0):.2f}" for item in one_time_costs]
+                return "\n".join(items)
             return '€0.00'
             
         elif control_name == 'calctotaalsetup':
             # Calculated totals for one-time costs
             one_time_costs = data.get('oneTimeCosts', [])
             if one_time_costs:
-                if len(one_time_costs) == 1:
-                    total = one_time_costs[0].get('quantity', 0) * one_time_costs[0].get('unitPrice', 0)
-                    return f"€{total:.2f}"
-                else:
-                    items = []
-                    for item in one_time_costs[:5]:
-                        total = item.get('quantity', 0) * item.get('unitPrice', 0)
-                        items.append(f"• €{total:.2f}")
-                    if len(one_time_costs) > 5:
-                        items.append("• ...")
-                    return "\n".join(items)
+                items = []
+                for item in one_time_costs:
+                    total = item.get('quantity', 0) * item.get('unitPrice', 0)
+                    items.append(f"€{total:.2f}")
+                return "\n".join(items)
             return '€0.00'
             
         elif control_name == 'Jaarlijks':
             # Unit prices for recurring costs  
             recurring_costs = data.get('recurringCosts', [])
             if recurring_costs:
-                if len(recurring_costs) == 1:
-                    return f"€{recurring_costs[0].get('unitPrice', 0):.2f}"
-                else:
-                    items = []
-                    for item in recurring_costs[:5]:
-                        items.append(f"• €{item.get('unitPrice', 0):.2f}")
-                    if len(recurring_costs) > 5:
-                        items.append("• ...")
-                    return "\n".join(items)
+                items = [f"€{item.get('unitPrice', 0):.2f}" for item in recurring_costs]
+                return "\n".join(items)
             return '€0.00'
             
         elif control_name == 'calctotaaljaarlijks':
             # Calculated totals for recurring costs
             recurring_costs = data.get('recurringCosts', [])
             if recurring_costs:
-                if len(recurring_costs) == 1:
-                    total = recurring_costs[0].get('quantity', 0) * recurring_costs[0].get('unitPrice', 0)
-                    return f"€{total:.2f}"
-                else:
-                    items = []
-                    for item in recurring_costs[:5]:
-                        total = item.get('quantity', 0) * item.get('unitPrice', 0)
-                        items.append(f"• €{total:.2f}")
-                    if len(recurring_costs) > 5:
-                        items.append("• ...")
-                    return "\n".join(items)
+                items = []
+                for item in recurring_costs:
+                    total = item.get('quantity', 0) * item.get('unitPrice', 0)
+                    items.append(f"€{total:.2f}")
+                return "\n".join(items)
             return '€0.00'
         
         # For non-contextual controls, use the standard mapping
