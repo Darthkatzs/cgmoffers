@@ -215,105 +215,121 @@ class ContentControlProcessor:
         # Handle table fields that need context-aware values
         if control_name == 'Module':
             if instance_num == 1:
-                # First instance: use one-time costs
+                # First instance: use one-time costs (all items)
                 one_time_costs = data.get('oneTimeCosts', [])
-                if one_time_costs and len(one_time_costs) >= 1:
-                    return one_time_costs[0].get('material', '')
+                if one_time_costs:
+                    if len(one_time_costs) == 1:
+                        return one_time_costs[0].get('material', '')
+                    else:
+                        # Multiple items - show formatted list
+                        items = []
+                        for i, item in enumerate(one_time_costs[:5]):
+                            items.append(f"{item.get('material', '')}")
+                        return "\n".join(items)
             elif instance_num == 2:
-                # Second instance: check if there's a second one-time cost item
-                one_time_costs = data.get('oneTimeCosts', [])
-                if one_time_costs and len(one_time_costs) >= 2:
-                    return one_time_costs[1].get('material', '')
-            elif instance_num == 3:
-                # Third instance: use recurring costs
+                # Second instance: use recurring costs (all items)
                 recurring_costs = data.get('recurringCosts', [])
-                if recurring_costs and len(recurring_costs) >= 1:
-                    return recurring_costs[0].get('material', '')
-            elif instance_num == 4:
-                # Fourth instance: check if there's a second recurring cost item
-                recurring_costs = data.get('recurringCosts', [])
-                if recurring_costs and len(recurring_costs) >= 2:
-                    return recurring_costs[1].get('material', '')
+                if recurring_costs:
+                    if len(recurring_costs) == 1:
+                        return recurring_costs[0].get('material', '')
+                    else:
+                        # Multiple items - show formatted list
+                        items = []
+                        for i, item in enumerate(recurring_costs[:5]):
+                            items.append(f"{item.get('material', '')}")
+                        return "\n".join(items)
             return ''
             
         elif control_name == 'Aantal':
             if instance_num == 1:
-                # First instance: first one-time cost item
+                # First instance: use one-time costs (all items)
                 one_time_costs = data.get('oneTimeCosts', [])
-                if one_time_costs and len(one_time_costs) >= 1:
-                    return str(one_time_costs[0].get('quantity', ''))
+                if one_time_costs:
+                    if len(one_time_costs) == 1:
+                        return str(one_time_costs[0].get('quantity', ''))
+                    else:
+                        # Multiple items - show formatted list
+                        items = []
+                        for i, item in enumerate(one_time_costs[:5]):
+                            items.append(f"{item.get('quantity', '')}")
+                        return "\n".join(items)
             elif instance_num == 2:
-                # Second instance: second one-time cost item
-                one_time_costs = data.get('oneTimeCosts', [])
-                if one_time_costs and len(one_time_costs) >= 2:
-                    return str(one_time_costs[1].get('quantity', ''))
-            elif instance_num == 3:
-                # Third instance: first recurring cost item
+                # Second instance: use recurring costs (all items)
                 recurring_costs = data.get('recurringCosts', [])
-                if recurring_costs and len(recurring_costs) >= 1:
-                    return str(recurring_costs[0].get('quantity', ''))
-            elif instance_num == 4:
-                # Fourth instance: second recurring cost item
-                recurring_costs = data.get('recurringCosts', [])
-                if recurring_costs and len(recurring_costs) >= 2:
-                    return str(recurring_costs[1].get('quantity', ''))
+                if recurring_costs:
+                    if len(recurring_costs) == 1:
+                        return str(recurring_costs[0].get('quantity', ''))
+                    else:
+                        # Multiple items - show formatted list
+                        items = []
+                        for i, item in enumerate(recurring_costs[:5]):
+                            items.append(f"{item.get('quantity', '')}")
+                        return "\n".join(items)
             return ''
             
-        # Handle price fields for individual table rows
+        # Handle price fields
         elif control_name == 'éénmalige setupkost':
             if instance_num == 1:
-                # First instance: first one-time cost item
+                # First instance: use one-time costs (all items)
                 one_time_costs = data.get('oneTimeCosts', [])
-                if one_time_costs and len(one_time_costs) >= 1:
-                    return f"€{one_time_costs[0].get('unitPrice', 0):.2f}"
-            elif instance_num == 2:
-                # Second instance: second one-time cost item
-                one_time_costs = data.get('oneTimeCosts', [])
-                if one_time_costs and len(one_time_costs) >= 2:
-                    return f"€{one_time_costs[1].get('unitPrice', 0):.2f}"
+                if one_time_costs:
+                    if len(one_time_costs) == 1:
+                        return f"€{one_time_costs[0].get('unitPrice', 0):.2f}"
+                    else:
+                        # Multiple items - show formatted list
+                        items = []
+                        for item in one_time_costs[:5]:
+                            items.append(f"€{item.get('unitPrice', 0):.2f}")
+                        return "\n".join(items)
             return '€0.00'
             
         elif control_name == 'calctotaalsetup':
             if instance_num == 1:
-                # First instance: first one-time cost item total
+                # First instance: use one-time costs (all items)
                 one_time_costs = data.get('oneTimeCosts', [])
-                if one_time_costs and len(one_time_costs) >= 1:
-                    total = one_time_costs[0].get('quantity', 0) * one_time_costs[0].get('unitPrice', 0)
-                    return f"€{total:.2f}"
-            elif instance_num == 2:
-                # Second instance: second one-time cost item total
-                one_time_costs = data.get('oneTimeCosts', [])
-                if one_time_costs and len(one_time_costs) >= 2:
-                    total = one_time_costs[1].get('quantity', 0) * one_time_costs[1].get('unitPrice', 0)
-                    return f"€{total:.2f}"
+                if one_time_costs:
+                    if len(one_time_costs) == 1:
+                        total = one_time_costs[0].get('quantity', 0) * one_time_costs[0].get('unitPrice', 0)
+                        return f"€{total:.2f}"
+                    else:
+                        # Multiple items - show formatted list
+                        items = []
+                        for item in one_time_costs[:5]:
+                            total = item.get('quantity', 0) * item.get('unitPrice', 0)
+                            items.append(f"€{total:.2f}")
+                        return "\n".join(items)
             return '€0.00'
             
         elif control_name == 'Jaarlijks':
-            if instance_num == 1:
-                # First instance: first recurring cost item
+            if instance_num == 2:
+                # Second instance: use recurring costs (all items)
                 recurring_costs = data.get('recurringCosts', [])
-                if recurring_costs and len(recurring_costs) >= 1:
-                    return f"€{recurring_costs[0].get('unitPrice', 0):.2f}"
-            elif instance_num == 2:
-                # Second instance: second recurring cost item
-                recurring_costs = data.get('recurringCosts', [])
-                if recurring_costs and len(recurring_costs) >= 2:
-                    return f"€{recurring_costs[1].get('unitPrice', 0):.2f}"
+                if recurring_costs:
+                    if len(recurring_costs) == 1:
+                        return f"€{recurring_costs[0].get('unitPrice', 0):.2f}"
+                    else:
+                        # Multiple items - show formatted list
+                        items = []
+                        for item in recurring_costs[:5]:
+                            items.append(f"€{item.get('unitPrice', 0):.2f}")
+                        return "\n".join(items)
             return '€0.00'
             
         elif control_name == 'calctotaaljaarlijks':
-            if instance_num == 1:
-                # First instance: first recurring cost item total
+            if instance_num == 2:
+                # Second instance: use recurring costs (all items)
                 recurring_costs = data.get('recurringCosts', [])
-                if recurring_costs and len(recurring_costs) >= 1:
-                    total = recurring_costs[0].get('quantity', 0) * recurring_costs[0].get('unitPrice', 0)
-                    return f"€{total:.2f}"
-            elif instance_num == 2:
-                # Second instance: second recurring cost item total
-                recurring_costs = data.get('recurringCosts', [])
-                if recurring_costs and len(recurring_costs) >= 2:
-                    total = recurring_costs[1].get('quantity', 0) * recurring_costs[1].get('unitPrice', 0)
-                    return f"€{total:.2f}"
+                if recurring_costs:
+                    if len(recurring_costs) == 1:
+                        total = recurring_costs[0].get('quantity', 0) * recurring_costs[0].get('unitPrice', 0)
+                        return f"€{total:.2f}"
+                    else:
+                        # Multiple items - show formatted list
+                        items = []
+                        for item in recurring_costs[:5]:
+                            total = item.get('quantity', 0) * item.get('unitPrice', 0)
+                            items.append(f"€{total:.2f}")
+                        return "\n".join(items)
             return '€0.00'
         
         # For non-contextual controls, use the standard mapping
