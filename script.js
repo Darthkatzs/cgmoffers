@@ -19,8 +19,77 @@ class QuotationGenerator {
             this.generatePDF();
         });
 
+        // Autofill (demo) button
+        const autofillBtn = document.getElementById('autofillDemo');
+        if (autofillBtn) {
+            autofillBtn.addEventListener('click', () => {
+                this.autofillDemo();
+            });
+        }
+
         // Initial event listeners for existing rows
         this.attachRowEventListeners();
+    }
+
+    // Fill the form with mock/demo data for quick testing
+    autofillDemo() {
+        const demo = this.getDemoData();
+
+        // Company fields
+        document.getElementById('companyName').value = demo.companyName;
+        document.getElementById('contactName').value = demo.contactName;
+        document.getElementById('address').value = demo.address;
+        document.getElementById('postalCode').value = demo.postalCode;
+        document.getElementById('city').value = demo.city;
+        document.getElementById('companyId').value = demo.companyId;
+        document.getElementById('description').value = demo.description;
+
+        // Costs
+        this.populateCosts('oneTimeCosts', demo.oneTimeCosts);
+        this.populateCosts('recurringCosts', demo.recurringCosts);
+
+        // Recalculate totals
+        this.updateTotals();
+    }
+
+    // Helper to populate a costs container with items
+    populateCosts(containerId, items) {
+        const container = document.getElementById(containerId);
+        // Clear existing rows
+        container.innerHTML = '';
+
+        items.forEach((item) => {
+            this.addCostRow(containerId);
+            const row = container.lastElementChild;
+            row.querySelector('.material-name').value = item.material;
+            row.querySelector('.quantity').value = item.quantity;
+            row.querySelector('.unit-price').value = item.unitPrice.toFixed(2);
+            this.updateRowTotal(row);
+        });
+
+        // Reattach listeners for the new rows
+        this.attachRowEventListeners();
+    }
+
+    // Demo data used by the Autofill button
+    getDemoData() {
+        return {
+            companyName: 'Test Company BV',
+            contactName: 'Jan Jansen',
+            address: 'Hoofdstraat 123',
+            postalCode: '1234 AB',
+            city: 'Amsterdam',
+            companyId: 'NL001234567B01',
+            description: 'Voorbeeldconfiguratie voor netwerk- en cloudservices.',
+            oneTimeCosts: [
+                { material: 'Firewall installatie', quantity: 1, unitPrice: 530.00, total: 530.00 },
+                { material: 'Bekabeling & montage', quantity: 10, unitPrice: 12.50, total: 125.00 }
+            ],
+            recurringCosts: [
+                { material: 'Cloud back-up (maandelijks)', quantity: 1, unitPrice: 35.00, total: 35.00 },
+                { material: 'Monitoring & support (maandelijks)', quantity: 1, unitPrice: 49.00, total: 49.00 }
+            ]
+        };
     }
 
     addCostRow(containerId) {
