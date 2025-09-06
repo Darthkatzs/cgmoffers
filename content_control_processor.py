@@ -19,8 +19,8 @@ class ContentControlProcessor:
         with open('control_mappings.json', 'r') as f:
             self.config = json.load(f)
         self.controls = self.config['controls']
-        # Feature flag: enable repeating sections (safe after analysis and fixes)
-        self.enable_repeating_sections = True
+        # Feature flag: temporarily disable repeating sections until we re-implement cleanly
+        self.enable_repeating_sections = False
     
     def process_word_template(self, template_path, data, output_path):
         """Process Word template by directly manipulating content controls in XML."""
@@ -174,7 +174,7 @@ class ContentControlProcessor:
                         
                         # If we found a control name
                         if control_name:
-                            # Always skip overriding row controls inside repeating sections
+                            # Always avoid overriding row controls inside repeating sections
                             inside_repeating = is_inside_repeating_section(sdt)
                             if inside_repeating and control_name in row_fields:
                                 print(f"      ⏭️  Skipping control '{control_name}' inside repeating section")
