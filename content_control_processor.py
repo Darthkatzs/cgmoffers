@@ -164,25 +164,49 @@ class ContentControlProcessor:
                                 if sdt_content is not None:
                                     # Prepare lines (support multi-line values)
                                     lines = str(replacement_value).split('\n')
-                                    
-                                    # Remove all existing children to rebuild cleanly with line breaks
-                                    for child in list(sdt_content):
-                                        sdt_content.remove(child)
-                                    
-                                    # Create one paragraph containing runs with <w:br/> between lines
-                                    p = ET.SubElement(sdt_content, f'{w_ns}p')
-                                    for i, part in enumerate(lines):
-                                        # Add text run
-                                        r = ET.SubElement(p, f'{w_ns}r')
-                                        t = ET.SubElement(r, f'{w_ns}t')
-                                        # Preserve spaces/newlines
-                                        t.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
-                                        t.text = part
-                                        # Add explicit line break between parts (except after last)
-                                        if i < len(lines) - 1:
-                                            br_run = ET.SubElement(p, f'{w_ns}r')
-                                            ET.SubElement(br_run, f'{w_ns}br')
-                                    
+
+                                    # Detect SDT level by inspecting existing children BEFORE modifying
+                                    existing_children = list(sdt_content)
+                                    has_run_child = any(ch.tag == f'{w_ns}r' for ch in existing_children)
+                                    has_para_child = any(ch.tag == f'{w_ns}p' for ch in existing_children)
+
+                                    if has_run_child and not has_para_child:
+                                        # RUN-LEVEL SDT: rebuild direct runs under sdtContent
+                                        # Remove existing w:r children only
+                                        for ch in existing_children:
+                                            if ch.tag == f'{w_ns}r':
+                                                sdt_content.remove(ch)
+
+                                        for i, part in enumerate(lines):
+                                            r = ET.SubElement(sdt_content, f'{w_ns}r')
+                                            t = ET.SubElement(r, f'{w_ns}t')
+                                            t.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+                                            t.text = part
+                                            if i < len(lines) - 1:
+                                                br = ET.SubElement(sdt_content, f'{w_ns}r')
+                                                ET.SubElement(br, f'{w_ns}br')
+                                    else:
+                                        # BLOCK-LEVEL SDT (paragraph/table cell): update within a paragraph
+                                        # Use first paragraph if present; otherwise create one
+                                        p = sdt_content.find(f'{w_ns}p')
+                                        if p is None:
+                                            # Do NOT wipe all content; just create new paragraph appended
+                                            p = ET.SubElement(sdt_content, f'{w_ns}p')
+
+                                        # Clear existing runs within the paragraph
+                                        for r in list(p.findall(f'{w_ns}r')):
+                                            p.remove(r)
+
+                                        # Add runs with explicit line breaks
+                                        for i, part in enumerate(lines):
+                                            r = ET.SubElement(p, f'{w_ns}r')
+                                            t = ET.SubElement(r, f'{w_ns}t')
+                                            t.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+                                            t.text = part
+                                            if i < len(lines) - 1:
+                                                br_run = ET.SubElement(p, f'{w_ns}r')
+                                                ET.SubElement(br_run, f'{w_ns}br')
+
                                     changes_made += 1
                                     print(f"      ✅ Updated control '{control_name}' (instance {instance_num}) -> '{replacement_value}'")
                 
