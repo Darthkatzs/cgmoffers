@@ -78,9 +78,13 @@ class ContentControlProcessor:
             return False
     
     def process_content_controls_xml(self, xml_content, control_mappings, data):
-        """Process content controls in XML content with context-aware table field handling."""
+        """Process content controls in XML content with repeating section support."""
         
         changes_made = 0
+        
+        # First handle repeating sections
+        xml_content, repeating_changes = self.process_repeating_sections(xml_content, data)
+        changes_made += repeating_changes
         
         try:
             # Parse XML with namespace handling
@@ -280,6 +284,122 @@ class ContentControlProcessor:
             
         # No mapping found
         return None
+    
+    def process_repeating_sections(self, xml_content, data):
+        """Handle Word repeating section content controls for items1 and items2."""
+        
+        changes_made = 0
+        
+        try:
+            # Handle items1 (one-time costs)
+            one_time_costs = data.get('oneTimeCosts', [])
+            if one_time_costs:
+                xml_content, items1_changes = self.duplicate_repeating_section(
+                    xml_content, 'items1', one_time_costs
+                )
+                changes_made += items1_changes
+            
+            # Handle items2 (recurring costs)
+            recurring_costs = data.get('recurringCosts', [])
+            if recurring_costs:
+                xml_content, items2_changes = self.duplicate_repeating_section(
+                    xml_content, 'items2', recurring_costs
+                )
+                changes_made += items2_changes
+                
+        except Exception as e:
+            print(f"   ⚠️  Error processing repeating sections: {e}")
+        
+        return xml_content, changes_made
+    
+    def duplicate_repeating_section(self, xml_content, section_name, items):
+        """Duplicate a repeating section for each item in the data."""
+        
+        import re
+        
+        changes_made = 0
+        
+        try:
+            # Find the repeating section container
+            pattern = rf'(<w:sdt[^>]*>.*?<w:tag w:val="{section_name}"[^>]*/>.*?<w:sdtContent>)(.*?)(</w:sdtContent>.*?</w:sdt>)'
+            match = re.search(pattern, xml_content, re.DOTALL)
+            
+            if not match:
+                return xml_content, 0
+            
+            section_start = match.group(1)
+            section_content = match.group(2)
+            section_end = match.group(3)
+            
+            # Find the repeating section item template within the content
+            item_pattern = r'(<w:sdt[^>]*>.*?repeatingSectionItem.*?<w:sdtContent>)(.*?)(</w:sdtContent>.*?</w:sdt>)'
+            item_match = re.search(item_pattern, section_content, re.DOTALL)
+            
+            if not item_match:
+                return xml_content, 0
+            
+            item_template = item_match.group(0)
+            item_content = item_match.group(2)
+            
+            # Generate content for each item
+            new_items = []
+            for i, item in enumerate(items):
+                # Create a copy of the item template
+                new_item = item_template
+                
+                # Replace placeholders in this item
+                for field, value in item.items():
+                    if field == 'material':
+                        new_item = self.replace_control_in_xml(new_item, 'Module', str(value))
+                    elif field == 'quantity':
+                        new_item = self.replace_control_in_xml(new_item, 'Aantal', str(value))
+                    elif field == 'unitPrice':
+                        if section_name == 'items1':
+                            new_item = self.replace_control_in_xml(new_item, 'éénmalige setupkost', f"€{value:.2f}")
+                        else:
+                            new_item = self.replace_control_in_xml(new_item, 'Jaarlijks', f"€{value:.2f}")
+                
+                # Calculate and set totals
+                total = item.get('quantity', 0) * item.get('unitPrice', 0)
+                if section_name == 'items1':
+                    new_item = self.replace_control_in_xml(new_item, 'calctotaalsetup', f"€{total:.2f}")
+                else:
+                    new_item = self.replace_control_in_xml(new_item, 'calctotaaljaarlijks', f"€{total:.2f}")
+                
+                new_items.append(new_item)
+                changes_made += 1
+            
+            # Replace the original section with the duplicated items
+            new_section_content = section_content.replace(item_template, ''.join(new_items))
+            new_section = section_start + new_section_content + section_end
+            
+            # Replace in the full XML
+            xml_content = xml_content.replace(match.group(0), new_section)
+            
+        except Exception as e:
+            print(f"   ⚠️  Error duplicating section {section_name}: {e}")
+        
+        return xml_content, changes_made
+    
+    def replace_control_in_xml(self, xml_content, control_name, value):
+        """Replace a specific content control in XML content."""
+        
+        import re
+        
+        # Pattern to find content control by alias or tag
+        patterns = [
+            rf'(<w:sdt[^>]*>.*?<w:alias w:val="{re.escape(control_name)}"[^>]*/>.*?<w:sdtContent>.*?<w:t[^>]*>)[^<]*(</w:t>.*?</w:sdtContent>.*?</w:sdt>)',
+            rf'(<w:sdt[^>]*>.*?<w:tag w:val="{re.escape(control_name)}"[^>]*/>.*?<w:sdtContent>.*?<w:t[^>]*>)[^<]*(</w:t>.*?</w:sdtContent>.*?</w:sdt>)'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, xml_content, re.DOTALL)
+            if match:
+                replacement = match.group(1) + str(value) + match.group(2)
+                xml_content = xml_content.replace(match.group(0), replacement)
+                break
+        
+        return xml_content
     
     def calculate_values(self, data):
         """Calculate all the values needed for the controls."""
