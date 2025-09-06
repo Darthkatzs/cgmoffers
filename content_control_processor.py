@@ -10,6 +10,7 @@ import tempfile
 import shutil
 import os
 import json
+import copy
 from datetime import datetime
 
 class ContentControlProcessor:
@@ -126,6 +127,8 @@ class ContentControlProcessor:
             ET.register_namespace('wps', 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape')
             
             root = ET.fromstring(xml_content)
+            # Build parent map to detect ancestry
+            parent_map = {c: p for p in root.iter() for c in p}
             
             # Find all Structured Document Tags (content controls)
             w_ns = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
@@ -133,6 +136,21 @@ class ContentControlProcessor:
             # Track instances of duplicate control names
             control_instances = {}
             
+            row_fields = {
+                'Module', 'Aantal', 'éénmalige setupkost', 'calctotaalsetup', 'Jaarlijks', 'calctotaaljaarlijks'
+            }
+
+            def is_inside_repeating_section(node):
+                w15_ns = '{http://schemas.microsoft.com/office/word/2012/wordml}'
+                cur = node
+                while cur is not None:
+                    if cur.tag == f'{w_ns}sdt':
+                        pr = cur.find(f'{w_ns}sdtPr')
+                        if pr is not None and pr.find(f'{w15_ns}repeatingSectionItem') is not None:
+                            return True
+                    cur = parent_map.get(cur)
+                return False
+
             for sdt in root.iter(f'{w_ns}sdt'):
                 try:
                     # Find the SDT properties to get the control name
@@ -153,6 +171,11 @@ class ContentControlProcessor:
                         
                         # If we found a control name
                         if control_name:
+                            inside_repeating = is_inside_repeating_section(sdt)
+                            if inside_repeating and control_name in row_fields:
+                                # Skip overriding values for repeating row controls
+                                print(f"      ⏭️  Skipping control '{control_name}' inside repeating section")
+                                continue
                             # Track which instance this is
                             if control_name not in control_instances:
                                 control_instances[control_name] = 0
@@ -319,113 +342,158 @@ class ContentControlProcessor:
         return xml_content, changes_made
     
     def duplicate_repeating_section(self, xml_content, section_name, items):
-        """Duplicate a repeating section for each item in the data."""
-        
-        import re
-        
+        """Duplicate a repeating section for each item in the data using namespace-aware XML ops."""
         changes_made = 0
-        
         try:
             print(f"   🔍 Looking for section: {section_name}")
-            
-            # Find the repeating section container
-            pattern = rf'(<w:sdt[^>]*>.*?<w:tag w:val="{section_name}"[^>]*/>.*?<w:sdtContent>)(.*?)(</w:sdtContent>.*?</w:sdt>)'
-            match = re.search(pattern, xml_content, re.DOTALL)
-            
-            if not match:
+
+            # Preserve original XML declaration if present
+            xml_decl = None
+            if xml_content.startswith('<?xml'):
+                xml_decl = xml_content.split('?>', 1)[0] + '?>'
+
+            root = ET.fromstring(xml_content)
+            w = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+            w15 = '{http://schemas.microsoft.com/office/word/2012/wordml}'
+
+            # 1) Find the section container SDT by its tag value
+            section_sdt = None
+            for sdt in root.iter(f'{w}sdt'):
+                pr = sdt.find(f'{w}sdtPr')
+                if pr is None:
+                    continue
+                tag = pr.find(f'{w}tag')
+                if tag is not None and tag.get(f'{w}val') == section_name:
+                    section_sdt = sdt
+                    break
+
+            if section_sdt is None:
                 print(f"   ❌ No section container found for {section_name}")
                 return xml_content, 0
-            
+
             print(f"   ✅ Found section container for {section_name}")
-            section_start = match.group(1)
-            section_content = match.group(2)
-            section_end = match.group(3)
-            
-            # Based on the actual XML structure from logs:
-            # <w:sdt><w:sdtPr>...w15:repeatingSectionItem/></w:sdtPr><w:sdtEndPr/><w:sdtContent>...</w:sdtContent></w:sdt>
-            pattern = r'(<w:sdt[^>]*>.*?<w:sdtPr>.*?<w15:repeatingSectionItem/>.*?</w:sdtPr>.*?<w:sdtEndPr/>.*?<w:sdtContent>)(.*?)(</w:sdtContent>.*?</w:sdt>)'
-            item_match = re.search(pattern, section_content, re.DOTALL)
-            
-            if item_match:
-                print(f"   ✅ Found repeatingSectionItem structure for {section_name}")
-            else:
-                # Fallback pattern without sdtEndPr
-                pattern = r'(<w:sdt[^>]*>.*?<w:sdtPr>.*?<w15:repeatingSectionItem/>.*?</w:sdtPr>.*?<w:sdtContent>)(.*?)(</w:sdtContent>.*?</w:sdt>)'
-                item_match = re.search(pattern, section_content, re.DOTALL)
-                if item_match:
-                    print(f"   ✅ Found repeatingSectionItem structure (fallback) for {section_name}")
-            
-            if not item_match:
-                print(f"   ❌ No repeatingSectionItem found in {section_name}")
-                # Show what we actually found for debugging
-                if 'repeatingSectionItem' in section_content:
-                    print(f"   🔍 repeatingSectionItem text found but pattern didn't match")
-                    # Show a snippet of what we found
-                    start_idx = section_content.find('repeatingSectionItem')
-                    if start_idx != -1:
-                        snippet = section_content[max(0, start_idx-100):start_idx+200]
-                        print(f"   📋 Found snippet: ...{snippet}...")
+
+            section_content = section_sdt.find(f'{w}sdtContent')
+            if section_content is None:
+                print(f"   ❌ Section {section_name} has no sdtContent")
                 return xml_content, 0
-            
+
+            # 2) Inside section, find nested SDT that has w15:repeatingSectionItem in its sdtPr
+            repeating_sdt = None
+            for nested in section_content.iter(f'{w}sdt'):
+                npr = nested.find(f'{w}sdtPr')
+                if npr is None:
+                    continue
+                if npr.find(f'{w15}repeatingSectionItem') is not None:
+                    repeating_sdt = nested
+                    break
+
+            if repeating_sdt is None:
+                print(f"   ❌ No repeatingSectionItem found in {section_name}")
+                return xml_content, 0
+
             print(f"   ✅ Found repeatingSectionItem in {section_name}")
-            # The item template is the entire SDT with repeatingSectionItem
-            item_template = item_match.group(0)
-            item_start = item_match.group(1)  # Everything before content
-            item_content = item_match.group(2)  # The actual content to duplicate
-            item_end = item_match.group(3)     # Everything after content
-            
-            # Generate content for each item - duplicate the content inside the SDT
-            new_content_items = []
-            for i, item in enumerate(items):
-                print(f"   🔄 Processing item {i+1}: {item}")
-                # Create a copy of just the content (not the whole SDT wrapper)
-                new_item_content = item_content
-                
-                # Replace placeholders in this item content
-                for field, value in item.items():
-                    if field == 'material':
-                        print(f"     📝 Setting Module: {value}")
-                        new_item_content = self.replace_control_in_xml(new_item_content, 'Module', str(value))
-                    elif field == 'quantity':
-                        print(f"     📝 Setting Aantal: {value}")
-                        new_item_content = self.replace_control_in_xml(new_item_content, 'Aantal', str(value))
-                    elif field == 'unitPrice':
-                        if section_name == 'items1':
-                            print(f"     📝 Setting éénmalige setupkost: €{value:.2f}")
-                            new_item_content = self.replace_control_in_xml(new_item_content, 'éénmalige setupkost', f"€{value:.2f}")
-                        else:
-                            print(f"     📝 Setting Jaarlijks: €{value:.2f}")
-                            new_item_content = self.replace_control_in_xml(new_item_content, 'Jaarlijks', f"€{value:.2f}")
-                
-                # Calculate and set totals
-                total = item.get('quantity', 0) * item.get('unitPrice', 0)
+
+            rep_content = repeating_sdt.find(f'{w}sdtContent')
+            if rep_content is None:
+                print(f"   ❌ repeatingSectionItem SDT has no sdtContent in {section_name}")
+                return xml_content, 0
+
+            # Take the first child(ren) as template nodes
+            template_children = list(rep_content)
+            if not template_children:
+                print(f"   ❌ repeatingSectionItem sdtContent is empty in {section_name}")
+                return xml_content, 0
+
+            # We'll use the entire current content as a template block
+            template_block = [copy.deepcopy(child) for child in template_children]
+
+            # Clear current contents
+            for child in list(rep_content):
+                rep_content.remove(child)
+
+            # Build rows for each item
+            for idx, item in enumerate(items, start=1):
+                print(f"   🔄 Processing item {idx}: {item}")
+                # Duplicate the template block
+                clones = [copy.deepcopy(node) for node in template_block]
+                # Wrap in a temporary parent to easily run setters
+                temp_parent = ET.Element('temp')
+                for c in clones:
+                    temp_parent.append(c)
+
+                # Set values within this block
+                material = str(item.get('material', ''))
+                qty = str(item.get('quantity', ''))
+                unit = float(item.get('unitPrice', 0))
+                total = float(item.get('quantity', 0)) * float(item.get('unitPrice', 0))
+
+                self._set_control_value_in_element(temp_parent, 'Module', material)
+                self._set_control_value_in_element(temp_parent, 'Aantal', qty)
                 if section_name == 'items1':
-                    print(f"     📝 Setting calctotaalsetup: €{total:.2f}")
-                    new_item_content = self.replace_control_in_xml(new_item_content, 'calctotaalsetup', f"€{total:.2f}")
+                    self._set_control_value_in_element(temp_parent, 'éénmalige setupkost', f"€{unit:.2f}")
+                    self._set_control_value_in_element(temp_parent, 'calctotaalsetup', f"€{total:.2f}")
                 else:
-                    print(f"     📝 Setting calctotaaljaarlijks: €{total:.2f}")
-                    new_item_content = self.replace_control_in_xml(new_item_content, 'calctotaaljaarlijks', f"€{total:.2f}")
-                
-                new_content_items.append(new_item_content)
+                    self._set_control_value_in_element(temp_parent, 'Jaarlijks', f"€{unit:.2f}")
+                    self._set_control_value_in_element(temp_parent, 'calctotaaljaarlijks', f"€{total:.2f}")
+
+                # Append clones back into repeating content
+                for c in list(temp_parent):
+                    rep_content.append(c)
+
                 changes_made += 1
-            
-            # Create the new SDT with all duplicated content
-            new_item_sdt = item_start + ''.join(new_content_items) + item_end
-            
-            # Replace the original repeating section SDT with the new one
-            new_section_content = section_content.replace(item_template, new_item_sdt)
-            new_section = section_start + new_section_content + section_end
-            
-            # Replace in the full XML
-            xml_content = xml_content.replace(match.group(0), new_section)
-            print(f"   ✅ Replaced section {section_name} with {len(new_content_items)} items")
-            
+
+            # Convert back to string, preserving XML declaration if present
+            modified = ET.tostring(root, encoding='unicode')
+            if xml_decl and not modified.startswith('<?xml'):
+                modified = xml_decl + modified
+
+            print(f"   ✅ Replaced section {section_name} with {len(items)} items")
+            return modified, changes_made
+
         except Exception as e:
             print(f"   ⚠️  Error duplicating section {section_name}: {e}")
             import traceback
             traceback.print_exc()
-        
-        return xml_content, changes_made
+            return xml_content, 0
+
+    def _set_control_value_in_element(self, element, control_name, value):
+        """Set the text of a content control (by alias or tag) within the given element subtree."""
+        w = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+        updated = False
+        for sdt in element.iter(f'{w}sdt'):
+            try:
+                pr = sdt.find(f'{w}sdtPr')
+                if pr is None:
+                    continue
+                name = None
+                alias = pr.find(f'{w}alias')
+                if alias is not None:
+                    name = alias.get(f'{w}val')
+                if not name:
+                    tag = pr.find(f'{w}tag')
+                    if tag is not None:
+                        name = tag.get(f'{w}val')
+                if name != control_name:
+                    continue
+                content = sdt.find(f'{w}sdtContent')
+                if content is None:
+                    continue
+                # Find first text run and set it
+                t_elem = None
+                for t in content.iter(f'{w}t'):
+                    t_elem = t
+                    break
+                if t_elem is None:
+                    # Create a new paragraph/run/text if needed
+                    p = ET.SubElement(content, f'{w}p')
+                    r = ET.SubElement(p, f'{w}r')
+                    t_elem = ET.SubElement(r, f'{w}t')
+                t_elem.text = str(value)
+                updated = True
+            except Exception:
+                continue
+        return updated
     
     def replace_control_in_xml(self, xml_content, control_name, value):
         """Replace a specific content control in XML content."""
