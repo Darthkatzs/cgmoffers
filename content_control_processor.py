@@ -212,67 +212,51 @@ class ContentControlProcessor:
     def get_contextual_value(self, control_name, instance_num, control_mappings, data):
         """Get contextual value for a control based on its instance number and context."""
         
-        # Handle table fields that need context-aware values with multiple item support
+        # Handle table fields that need context-aware values
         if control_name == 'Module':
             if instance_num == 1:
-                # First instance: use one-time costs (all items)
+                # First instance: use one-time costs
                 one_time_costs = data.get('oneTimeCosts', [])
-                if one_time_costs:
-                    if len(one_time_costs) == 1:
-                        return one_time_costs[0].get('material', '')
-                    else:
-                        # Multiple items - show formatted list
-                        items = []
-                        for i, item in enumerate(one_time_costs[:5]):  # Limit to first 5 to avoid overflow
-                            items.append(f"• {item.get('material', '')}")
-                        if len(one_time_costs) > 5:
-                            items.append("• ...")
-                        return "\\n".join(items)
+                if one_time_costs and len(one_time_costs) >= 1:
+                    return one_time_costs[0].get('material', '')
             elif instance_num == 2:
-                # Second instance: use recurring costs (all items)
+                # Second instance: check if there's a second one-time cost item
+                one_time_costs = data.get('oneTimeCosts', [])
+                if one_time_costs and len(one_time_costs) >= 2:
+                    return one_time_costs[1].get('material', '')
+            elif instance_num == 3:
+                # Third instance: use recurring costs
                 recurring_costs = data.get('recurringCosts', [])
-                if recurring_costs:
-                    if len(recurring_costs) == 1:
-                        return recurring_costs[0].get('material', '')
-                    else:
-                        # Multiple items - show formatted list
-                        items = []
-                        for i, item in enumerate(recurring_costs[:5]):  # Limit to first 5 to avoid overflow
-                            items.append(f"• {item.get('material', '')}")
-                        if len(recurring_costs) > 5:
-                            items.append("• ...")
-                        return "\\n".join(items)
+                if recurring_costs and len(recurring_costs) >= 1:
+                    return recurring_costs[0].get('material', '')
+            elif instance_num == 4:
+                # Fourth instance: check if there's a second recurring cost item
+                recurring_costs = data.get('recurringCosts', [])
+                if recurring_costs and len(recurring_costs) >= 2:
+                    return recurring_costs[1].get('material', '')
             return ''
             
         elif control_name == 'Aantal':
             if instance_num == 1:
-                # First instance: use one-time costs (all items)
+                # First instance: first one-time cost item
                 one_time_costs = data.get('oneTimeCosts', [])
-                if one_time_costs:
-                    if len(one_time_costs) == 1:
-                        return str(one_time_costs[0].get('quantity', ''))
-                    else:
-                        # Multiple items - show formatted list
-                        items = []
-                        for i, item in enumerate(one_time_costs[:5]):  # Limit to first 5
-                            items.append(f"• {item.get('quantity', '')}")
-                        if len(one_time_costs) > 5:
-                            items.append("• ...")
-                        return "\\n".join(items)
+                if one_time_costs and len(one_time_costs) >= 1:
+                    return str(one_time_costs[0].get('quantity', ''))
             elif instance_num == 2:
-                # Second instance: use recurring costs (all items)
+                # Second instance: second one-time cost item
+                one_time_costs = data.get('oneTimeCosts', [])
+                if one_time_costs and len(one_time_costs) >= 2:
+                    return str(one_time_costs[1].get('quantity', ''))
+            elif instance_num == 3:
+                # Third instance: first recurring cost item
                 recurring_costs = data.get('recurringCosts', [])
-                if recurring_costs:
-                    if len(recurring_costs) == 1:
-                        return str(recurring_costs[0].get('quantity', ''))
-                    else:
-                        # Multiple items - show formatted list
-                        items = []
-                        for i, item in enumerate(recurring_costs[:5]):  # Limit to first 5
-                            items.append(f"• {item.get('quantity', '')}")
-                        if len(recurring_costs) > 5:
-                            items.append("• ...")
-                        return "\\n".join(items)
+                if recurring_costs and len(recurring_costs) >= 1:
+                    return str(recurring_costs[0].get('quantity', ''))
+            elif instance_num == 4:
+                # Fourth instance: second recurring cost item
+                recurring_costs = data.get('recurringCosts', [])
+                if recurring_costs and len(recurring_costs) >= 2:
+                    return str(recurring_costs[1].get('quantity', ''))
             return ''
             
         # Handle price and calculated fields with multiple item support  
@@ -288,7 +272,7 @@ class ContentControlProcessor:
                         items.append(f"• €{item.get('unitPrice', 0):.2f}")
                     if len(one_time_costs) > 5:
                         items.append("• ...")
-                    return "\\n".join(items)
+                    return "\n".join(items)
             return '€0.00'
             
         elif control_name == 'calctotaalsetup':
@@ -305,7 +289,7 @@ class ContentControlProcessor:
                         items.append(f"• €{total:.2f}")
                     if len(one_time_costs) > 5:
                         items.append("• ...")
-                    return "\\n".join(items)
+                    return "\n".join(items)
             return '€0.00'
             
         elif control_name == 'Jaarlijks':
@@ -320,7 +304,7 @@ class ContentControlProcessor:
                         items.append(f"• €{item.get('unitPrice', 0):.2f}")
                     if len(recurring_costs) > 5:
                         items.append("• ...")
-                    return "\\n".join(items)
+                    return "\n".join(items)
             return '€0.00'
             
         elif control_name == 'calctotaaljaarlijks':
@@ -337,7 +321,7 @@ class ContentControlProcessor:
                         items.append(f"• €{total:.2f}")
                     if len(recurring_costs) > 5:
                         items.append("• ...")
-                    return "\\n".join(items)
+                    return "\n".join(items)
             return '€0.00'
         
         # For non-contextual controls, use the standard mapping
