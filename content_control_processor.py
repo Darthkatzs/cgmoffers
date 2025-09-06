@@ -342,15 +342,30 @@ class ContentControlProcessor:
             section_end = match.group(3)
             
             # The repeatingSectionItem is at the root level of section_content
-            # Look for the SDT that contains repeatingSectionItem
-            item_pattern = r'<w:sdt[^>]*>.*?<w15:repeatingSectionItem/>.*?<w:sdtContent>(.*?)</w:sdtContent>.*?</w:sdt>'
-            item_match = re.search(item_pattern, section_content, re.DOTALL)
+            # Look for the SDT that contains repeatingSectionItem - try multiple patterns
+            patterns = [
+                r'<w:sdt[^>]*>.*?<w15:repeatingSectionItem/>.*?<w:sdtContent>(.*?)</w:sdtContent>.*?</w:sdt>',
+                r'<w:sdt[^>]*>.*?<w15:repeatingSectionItem[^>]*/>.*?<w:sdtContent>(.*?)</w:sdtContent>.*?</w:sdt>',
+                r'<w:sdt[^>]*>.*?repeatingSectionItem.*?<w:sdtContent>(.*?)</w:sdtContent>.*?</w:sdt>'
+            ]
+            
+            item_match = None
+            for i, pattern in enumerate(patterns):
+                item_match = re.search(pattern, section_content, re.DOTALL)
+                if item_match:
+                    print(f"   ✅ Pattern {i+1} matched for {section_name}")
+                    break
             
             if not item_match:
                 print(f"   ❌ No repeatingSectionItem found in {section_name}")
                 # Show what we actually found for debugging
                 if 'repeatingSectionItem' in section_content:
                     print(f"   🔍 repeatingSectionItem text found but pattern didn't match")
+                    # Show a snippet of what we found
+                    start_idx = section_content.find('repeatingSectionItem')
+                    if start_idx != -1:
+                        snippet = section_content[max(0, start_idx-100):start_idx+200]
+                        print(f"   📋 Found snippet: ...{snippet}...")
                 return xml_content, 0
             
             print(f"   ✅ Found repeatingSectionItem in {section_name}")
