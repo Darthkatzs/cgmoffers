@@ -293,22 +293,28 @@ class ContentControlProcessor:
         try:
             # Handle items1 (one-time costs)
             one_time_costs = data.get('oneTimeCosts', [])
+            print(f"   🔍 Processing items1 with {len(one_time_costs)} items: {one_time_costs}")
             if one_time_costs:
                 xml_content, items1_changes = self.duplicate_repeating_section(
                     xml_content, 'items1', one_time_costs
                 )
                 changes_made += items1_changes
+                print(f"   ✅ items1 processing: {items1_changes} changes made")
             
             # Handle items2 (recurring costs)
             recurring_costs = data.get('recurringCosts', [])
+            print(f"   🔍 Processing items2 with {len(recurring_costs)} items: {recurring_costs}")
             if recurring_costs:
                 xml_content, items2_changes = self.duplicate_repeating_section(
                     xml_content, 'items2', recurring_costs
                 )
                 changes_made += items2_changes
+                print(f"   ✅ items2 processing: {items2_changes} changes made")
                 
         except Exception as e:
             print(f"   ⚠️  Error processing repeating sections: {e}")
+            import traceback
+            traceback.print_exc()
         
         return xml_content, changes_made
     
@@ -320,13 +326,17 @@ class ContentControlProcessor:
         changes_made = 0
         
         try:
+            print(f"   🔍 Looking for section: {section_name}")
+            
             # Find the repeating section container
             pattern = rf'(<w:sdt[^>]*>.*?<w:tag w:val="{section_name}"[^>]*/>.*?<w:sdtContent>)(.*?)(</w:sdtContent>.*?</w:sdt>)'
             match = re.search(pattern, xml_content, re.DOTALL)
             
             if not match:
+                print(f"   ❌ No section container found for {section_name}")
                 return xml_content, 0
             
+            print(f"   ✅ Found section container for {section_name}")
             section_start = match.group(1)
             section_content = match.group(2)
             section_end = match.group(3)
@@ -336,34 +346,43 @@ class ContentControlProcessor:
             item_match = re.search(item_pattern, section_content, re.DOTALL)
             
             if not item_match:
+                print(f"   ❌ No repeatingSectionItem found in {section_name}")
                 return xml_content, 0
             
+            print(f"   ✅ Found repeatingSectionItem in {section_name}")
             item_template = item_match.group(0)
             item_content = item_match.group(2)
             
             # Generate content for each item
             new_items = []
             for i, item in enumerate(items):
+                print(f"   🔄 Processing item {i+1}: {item}")
                 # Create a copy of the item template
                 new_item = item_template
                 
                 # Replace placeholders in this item
                 for field, value in item.items():
                     if field == 'material':
+                        print(f"     📝 Setting Module: {value}")
                         new_item = self.replace_control_in_xml(new_item, 'Module', str(value))
                     elif field == 'quantity':
+                        print(f"     📝 Setting Aantal: {value}")
                         new_item = self.replace_control_in_xml(new_item, 'Aantal', str(value))
                     elif field == 'unitPrice':
                         if section_name == 'items1':
+                            print(f"     📝 Setting éénmalige setupkost: €{value:.2f}")
                             new_item = self.replace_control_in_xml(new_item, 'éénmalige setupkost', f"€{value:.2f}")
                         else:
+                            print(f"     📝 Setting Jaarlijks: €{value:.2f}")
                             new_item = self.replace_control_in_xml(new_item, 'Jaarlijks', f"€{value:.2f}")
                 
                 # Calculate and set totals
                 total = item.get('quantity', 0) * item.get('unitPrice', 0)
                 if section_name == 'items1':
+                    print(f"     📝 Setting calctotaalsetup: €{total:.2f}")
                     new_item = self.replace_control_in_xml(new_item, 'calctotaalsetup', f"€{total:.2f}")
                 else:
+                    print(f"     📝 Setting calctotaaljaarlijks: €{total:.2f}")
                     new_item = self.replace_control_in_xml(new_item, 'calctotaaljaarlijks', f"€{total:.2f}")
                 
                 new_items.append(new_item)
@@ -375,9 +394,12 @@ class ContentControlProcessor:
             
             # Replace in the full XML
             xml_content = xml_content.replace(match.group(0), new_section)
+            print(f"   ✅ Replaced section {section_name} with {len(new_items)} items")
             
         except Exception as e:
             print(f"   ⚠️  Error duplicating section {section_name}: {e}")
+            import traceback
+            traceback.print_exc()
         
         return xml_content, changes_made
     
@@ -386,18 +408,26 @@ class ContentControlProcessor:
         
         import re
         
+        print(f"       🔍 Looking for control: {control_name} with value: {value}")
+        
         # Pattern to find content control by alias or tag
         patterns = [
             rf'(<w:sdt[^>]*>.*?<w:alias w:val="{re.escape(control_name)}"[^>]*/>.*?<w:sdtContent>.*?<w:t[^>]*>)[^<]*(</w:t>.*?</w:sdtContent>.*?</w:sdt>)',
             rf'(<w:sdt[^>]*>.*?<w:tag w:val="{re.escape(control_name)}"[^>]*/>.*?<w:sdtContent>.*?<w:t[^>]*>)[^<]*(</w:t>.*?</w:sdtContent>.*?</w:sdt>)'
         ]
         
-        for pattern in patterns:
+        found = False
+        for i, pattern in enumerate(patterns):
             match = re.search(pattern, xml_content, re.DOTALL)
             if match:
+                print(f"       ✅ Found control {control_name} using pattern {i+1}")
                 replacement = match.group(1) + str(value) + match.group(2)
                 xml_content = xml_content.replace(match.group(0), replacement)
+                found = True
                 break
+        
+        if not found:
+            print(f"       ❌ Control {control_name} not found in XML")
         
         return xml_content
     
