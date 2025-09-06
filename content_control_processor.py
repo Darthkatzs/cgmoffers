@@ -341,20 +341,19 @@ class ContentControlProcessor:
             section_content = match.group(2)
             section_end = match.group(3)
             
-            # The repeatingSectionItem is at the root level of section_content
-            # Look for the SDT that contains repeatingSectionItem - try multiple patterns
-            patterns = [
-                r'<w:sdt[^>]*>.*?<w15:repeatingSectionItem/>.*?<w:sdtContent>(.*?)</w:sdtContent>.*?</w:sdt>',
-                r'<w:sdt[^>]*>.*?<w15:repeatingSectionItem[^>]*/>.*?<w:sdtContent>(.*?)</w:sdtContent>.*?</w:sdt>',
-                r'<w:sdt[^>]*>.*?repeatingSectionItem.*?<w:sdtContent>(.*?)</w:sdtContent>.*?</w:sdt>'
-            ]
+            # Based on the actual XML structure from logs:
+            # <w:sdt><w:sdtPr>...w15:repeatingSectionItem/></w:sdtPr><w:sdtEndPr/><w:sdtContent>...</w:sdtContent></w:sdt>
+            pattern = r'(<w:sdt[^>]*>.*?<w:sdtPr>.*?<w15:repeatingSectionItem/>.*?</w:sdtPr>.*?<w:sdtEndPr/>.*?<w:sdtContent>)(.*?)(</w:sdtContent>.*?</w:sdt>)'
+            item_match = re.search(pattern, section_content, re.DOTALL)
             
-            item_match = None
-            for i, pattern in enumerate(patterns):
+            if item_match:
+                print(f"   ✅ Found repeatingSectionItem structure for {section_name}")
+            else:
+                # Fallback pattern without sdtEndPr
+                pattern = r'(<w:sdt[^>]*>.*?<w:sdtPr>.*?<w15:repeatingSectionItem/>.*?</w:sdtPr>.*?<w:sdtContent>)(.*?)(</w:sdtContent>.*?</w:sdt>)'
                 item_match = re.search(pattern, section_content, re.DOTALL)
                 if item_match:
-                    print(f"   ✅ Pattern {i+1} matched for {section_name}")
-                    break
+                    print(f"   ✅ Found repeatingSectionItem structure (fallback) for {section_name}")
             
             if not item_match:
                 print(f"   ❌ No repeatingSectionItem found in {section_name}")
@@ -371,50 +370,55 @@ class ContentControlProcessor:
             print(f"   ✅ Found repeatingSectionItem in {section_name}")
             # The item template is the entire SDT with repeatingSectionItem
             item_template = item_match.group(0)
-            item_content = item_match.group(1)
+            item_start = item_match.group(1)  # Everything before content
+            item_content = item_match.group(2)  # The actual content to duplicate
+            item_end = item_match.group(3)     # Everything after content
             
-            # Generate content for each item
-            new_items = []
+            # Generate content for each item - duplicate the content inside the SDT
+            new_content_items = []
             for i, item in enumerate(items):
                 print(f"   🔄 Processing item {i+1}: {item}")
-                # Create a copy of the item template
-                new_item = item_template
+                # Create a copy of just the content (not the whole SDT wrapper)
+                new_item_content = item_content
                 
-                # Replace placeholders in this item
+                # Replace placeholders in this item content
                 for field, value in item.items():
                     if field == 'material':
                         print(f"     📝 Setting Module: {value}")
-                        new_item = self.replace_control_in_xml(new_item, 'Module', str(value))
+                        new_item_content = self.replace_control_in_xml(new_item_content, 'Module', str(value))
                     elif field == 'quantity':
                         print(f"     📝 Setting Aantal: {value}")
-                        new_item = self.replace_control_in_xml(new_item, 'Aantal', str(value))
+                        new_item_content = self.replace_control_in_xml(new_item_content, 'Aantal', str(value))
                     elif field == 'unitPrice':
                         if section_name == 'items1':
                             print(f"     📝 Setting éénmalige setupkost: €{value:.2f}")
-                            new_item = self.replace_control_in_xml(new_item, 'éénmalige setupkost', f"€{value:.2f}")
+                            new_item_content = self.replace_control_in_xml(new_item_content, 'éénmalige setupkost', f"€{value:.2f}")
                         else:
                             print(f"     📝 Setting Jaarlijks: €{value:.2f}")
-                            new_item = self.replace_control_in_xml(new_item, 'Jaarlijks', f"€{value:.2f}")
+                            new_item_content = self.replace_control_in_xml(new_item_content, 'Jaarlijks', f"€{value:.2f}")
                 
                 # Calculate and set totals
                 total = item.get('quantity', 0) * item.get('unitPrice', 0)
                 if section_name == 'items1':
                     print(f"     📝 Setting calctotaalsetup: €{total:.2f}")
-                    new_item = self.replace_control_in_xml(new_item, 'calctotaalsetup', f"€{total:.2f}")
+                    new_item_content = self.replace_control_in_xml(new_item_content, 'calctotaalsetup', f"€{total:.2f}")
                 else:
                     print(f"     📝 Setting calctotaaljaarlijks: €{total:.2f}")
-                    new_item = self.replace_control_in_xml(new_item, 'calctotaaljaarlijks', f"€{total:.2f}")
+                    new_item_content = self.replace_control_in_xml(new_item_content, 'calctotaaljaarlijks', f"€{total:.2f}")
                 
-                new_items.append(new_item)
+                new_content_items.append(new_item_content)
                 changes_made += 1
             
-            # Replace the original section with the duplicated items
-            new_section_content = section_content.replace(item_template, ''.join(new_items))
+            # Create the new SDT with all duplicated content
+            new_item_sdt = item_start + ''.join(new_content_items) + item_end
+            
+            # Replace the original repeating section SDT with the new one
+            new_section_content = section_content.replace(item_template, new_item_sdt)
             new_section = section_start + new_section_content + section_end
             
             # Replace in the full XML
             xml_content = xml_content.replace(match.group(0), new_section)
-            print(f"   ✅ Replaced section {section_name} with {len(new_items)} items")
+            print(f"   ✅ Replaced section {section_name} with {len(new_content_items)} items")
             
         except Exception as e:
             print(f"   ⚠️  Error duplicating section {section_name}: {e}")
