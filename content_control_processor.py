@@ -10,7 +10,6 @@ import tempfile
 import shutil
 import os
 import json
-import copy
 from datetime import datetime
 
 class ContentControlProcessor:
@@ -19,8 +18,6 @@ class ContentControlProcessor:
         with open('control_mappings.json', 'r') as f:
             self.config = json.load(f)
         self.controls = self.config['controls']
-        # Feature flag: enable repeating sections with robust cloning
-        self.enable_repeating_sections = True
     
     def process_word_template(self, template_path, data, output_path):
         """Process Word template by directly manipulating content controls in XML."""
@@ -81,14 +78,9 @@ class ContentControlProcessor:
             return False
     
     def process_content_controls_xml(self, xml_content, control_mappings, data):
-        """Process content controls in XML content with repeating section support."""
+        """Process content controls in XML content with context-aware table field handling."""
         
         changes_made = 0
-        
-        # First handle repeating sections (disabled via feature flag while we analyze)
-        if self.enable_repeating_sections:
-            xml_content, repeating_changes = self.process_repeating_sections(xml_content, data)
-            changes_made += repeating_changes
         
         try:
             # Parse XML with namespace handling
@@ -130,8 +122,6 @@ class ContentControlProcessor:
             ET.register_namespace('wps', 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape')
             
             root = ET.fromstring(xml_content)
-            # Build parent map to detect ancestry
-            parent_map = {c: p for p in root.iter() for c in p}
             
             # Find all Structured Document Tags (content controls)
             w_ns = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
@@ -139,21 +129,6 @@ class ContentControlProcessor:
             # Track instances of duplicate control names
             control_instances = {}
             
-            row_fields = {
-                'Module', 'Aantal', 'éénmalige setupkost', 'calctotaalsetup', 'Jaarlijks', 'calctotaaljaarlijks'
-            }
-
-            def is_inside_repeating_section(node):
-                w15_ns = '{http://schemas.microsoft.com/office/word/2012/wordml}'
-                cur = node
-                while cur is not None:
-                    if cur.tag == f'{w_ns}sdt':
-                        pr = cur.find(f'{w_ns}sdtPr')
-                        if pr is not None and pr.find(f'{w15_ns}repeatingSectionItem') is not None:
-                            return True
-                    cur = parent_map.get(cur)
-                return False
-
             for sdt in root.iter(f'{w_ns}sdt'):
                 try:
                     # Find the SDT properties to get the control name
@@ -174,11 +149,6 @@ class ContentControlProcessor:
                         
                         # If we found a control name
                         if control_name:
-                            # Always avoid overriding row controls inside repeating sections
-                            inside_repeating = is_inside_repeating_section(sdt)
-                            if inside_repeating and control_name in row_fields:
-                                print(f"      ⏭️  Skipping control '{control_name}' inside repeating section")
-                                continue
                             # Track which instance this is
                             if control_name not in control_instances:
                                 control_instances[control_name] = 0
@@ -245,63 +215,113 @@ class ContentControlProcessor:
         # Handle table fields that need context-aware values
         if control_name == 'Module':
             if instance_num == 1:
-                # First instance: use first one-time cost
+                # First instance: use one-time costs
                 one_time_costs = data.get('oneTimeCosts', [])
                 if one_time_costs and len(one_time_costs) >= 1:
                     return one_time_costs[0].get('material', '')
             elif instance_num == 2:
-                # Second instance: use first recurring cost
+                # Second instance: check if there's a second one-time cost item
+                one_time_costs = data.get('oneTimeCosts', [])
+                if one_time_costs and len(one_time_costs) >= 2:
+                    return one_time_costs[1].get('material', '')
+            elif instance_num == 3:
+                # Third instance: use recurring costs
                 recurring_costs = data.get('recurringCosts', [])
                 if recurring_costs and len(recurring_costs) >= 1:
                     return recurring_costs[0].get('material', '')
+            elif instance_num == 4:
+                # Fourth instance: check if there's a second recurring cost item
+                recurring_costs = data.get('recurringCosts', [])
+                if recurring_costs and len(recurring_costs) >= 2:
+                    return recurring_costs[1].get('material', '')
             return ''
             
         elif control_name == 'Aantal':
             if instance_num == 1:
-                # First instance: use first one-time cost
+                # First instance: first one-time cost item
                 one_time_costs = data.get('oneTimeCosts', [])
                 if one_time_costs and len(one_time_costs) >= 1:
                     return str(one_time_costs[0].get('quantity', ''))
             elif instance_num == 2:
-                # Second instance: use first recurring cost
+                # Second instance: second one-time cost item
+                one_time_costs = data.get('oneTimeCosts', [])
+                if one_time_costs and len(one_time_costs) >= 2:
+                    return str(one_time_costs[1].get('quantity', ''))
+            elif instance_num == 3:
+                # Third instance: first recurring cost item
                 recurring_costs = data.get('recurringCosts', [])
                 if recurring_costs and len(recurring_costs) >= 1:
                     return str(recurring_costs[0].get('quantity', ''))
+            elif instance_num == 4:
+                # Fourth instance: second recurring cost item
+                recurring_costs = data.get('recurringCosts', [])
+                if recurring_costs and len(recurring_costs) >= 2:
+                    return str(recurring_costs[1].get('quantity', ''))
             return ''
             
-        # Handle price fields
+        # Handle price and calculated fields with multiple item support  
         elif control_name == 'éénmalige setupkost':
-            if instance_num == 1:
-                # First instance: use first one-time cost
-                one_time_costs = data.get('oneTimeCosts', [])
-                if one_time_costs and len(one_time_costs) >= 1:
+            # Unit prices for one-time costs
+            one_time_costs = data.get('oneTimeCosts', [])
+            if one_time_costs:
+                if len(one_time_costs) == 1:
                     return f"€{one_time_costs[0].get('unitPrice', 0):.2f}"
+                else:
+                    items = []
+                    for item in one_time_costs[:5]:
+                        items.append(f"• €{item.get('unitPrice', 0):.2f}")
+                    if len(one_time_costs) > 5:
+                        items.append("• ...")
+                    return "\n".join(items)
             return '€0.00'
             
         elif control_name == 'calctotaalsetup':
-            if instance_num == 1:
-                # First instance: use first one-time cost
-                one_time_costs = data.get('oneTimeCosts', [])
-                if one_time_costs and len(one_time_costs) >= 1:
+            # Calculated totals for one-time costs
+            one_time_costs = data.get('oneTimeCosts', [])
+            if one_time_costs:
+                if len(one_time_costs) == 1:
                     total = one_time_costs[0].get('quantity', 0) * one_time_costs[0].get('unitPrice', 0)
                     return f"€{total:.2f}"
+                else:
+                    items = []
+                    for item in one_time_costs[:5]:
+                        total = item.get('quantity', 0) * item.get('unitPrice', 0)
+                        items.append(f"• €{total:.2f}")
+                    if len(one_time_costs) > 5:
+                        items.append("• ...")
+                    return "\n".join(items)
             return '€0.00'
             
         elif control_name == 'Jaarlijks':
-            if instance_num == 2:
-                # Second instance: use first recurring cost
-                recurring_costs = data.get('recurringCosts', [])
-                if recurring_costs and len(recurring_costs) >= 1:
+            # Unit prices for recurring costs  
+            recurring_costs = data.get('recurringCosts', [])
+            if recurring_costs:
+                if len(recurring_costs) == 1:
                     return f"€{recurring_costs[0].get('unitPrice', 0):.2f}"
+                else:
+                    items = []
+                    for item in recurring_costs[:5]:
+                        items.append(f"• €{item.get('unitPrice', 0):.2f}")
+                    if len(recurring_costs) > 5:
+                        items.append("• ...")
+                    return "\n".join(items)
             return '€0.00'
             
         elif control_name == 'calctotaaljaarlijks':
-            if instance_num == 2:
-                # Second instance: use first recurring cost
-                recurring_costs = data.get('recurringCosts', [])
-                if recurring_costs and len(recurring_costs) >= 1:
+            # Calculated totals for recurring costs
+            recurring_costs = data.get('recurringCosts', [])
+            if recurring_costs:
+                if len(recurring_costs) == 1:
                     total = recurring_costs[0].get('quantity', 0) * recurring_costs[0].get('unitPrice', 0)
                     return f"€{total:.2f}"
+                else:
+                    items = []
+                    for item in recurring_costs[:5]:
+                        total = item.get('quantity', 0) * item.get('unitPrice', 0)
+                        items.append(f"• €{total:.2f}")
+                    if len(recurring_costs) > 5:
+                        items.append("• ...")
+                    return "\n".join(items)
             return '€0.00'
         
         # For non-contextual controls, use the standard mapping
@@ -310,216 +330,6 @@ class ContentControlProcessor:
             
         # No mapping found
         return None
-    
-    def process_repeating_sections(self, xml_content, data):
-        """Handle Word repeating section content controls for items1 and items2."""
-        
-        changes_made = 0
-        
-        try:
-            # Handle items1 (one-time costs)
-            one_time_costs = data.get('oneTimeCosts', [])
-            print(f"   🔍 Processing items1 with {len(one_time_costs)} items: {one_time_costs}")
-            if one_time_costs:
-                xml_content, items1_changes = self.duplicate_repeating_section(
-                    xml_content, 'items1', one_time_costs
-                )
-                changes_made += items1_changes
-                print(f"   ✅ items1 processing: {items1_changes} changes made")
-            
-            # Handle items2 (recurring costs)
-            recurring_costs = data.get('recurringCosts', [])
-            print(f"   🔍 Processing items2 with {len(recurring_costs)} items: {recurring_costs}")
-            if recurring_costs:
-                xml_content, items2_changes = self.duplicate_repeating_section(
-                    xml_content, 'items2', recurring_costs
-                )
-                changes_made += items2_changes
-                print(f"   ✅ items2 processing: {items2_changes} changes made")
-                
-        except Exception as e:
-            print(f"   ⚠️  Error processing repeating sections: {e}")
-            import traceback
-            traceback.print_exc()
-        
-        return xml_content, changes_made
-    
-    def duplicate_repeating_section(self, xml_content, section_name, items):
-        """Duplicate a repeating section for each item by cloning the entire repeatingSectionItem SDT per row."""
-        changes_made = 0
-        try:
-            print(f"   🔍 Looking for section: {section_name}")
-
-            # Preserve original XML declaration if present
-            xml_decl = None
-            if xml_content.startswith('<?xml'):
-                xml_decl = xml_content.split('?>', 1)[0] + '?>'
-
-            root = ET.fromstring(xml_content)
-            w = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
-            w15 = '{http://schemas.microsoft.com/office/word/2012/wordml}'
-
-            # Parent map for removals
-            parent_map = {c: p for p in root.iter() for c in p}
-
-            # 1) Find the section container SDT by its tag value
-            section_sdt = None
-            for sdt in root.iter(f'{w}sdt'):
-                pr = sdt.find(f'{w}sdtPr')
-                if pr is None:
-                    continue
-                tag = pr.find(f'{w}tag')
-                if tag is not None and tag.get(f'{w}val') == section_name:
-                    section_sdt = sdt
-                    break
-
-            if section_sdt is None:
-                print(f"   ❌ No section container found for {section_name}")
-                return xml_content, 0
-
-            print(f"   ✅ Found section container for {section_name}")
-
-            section_content = section_sdt.find(f'{w}sdtContent')
-            if section_content is None:
-                print(f"   ❌ Section {section_name} has no sdtContent")
-                return xml_content, 0
-
-            # 2) Find the repeatingSectionItem SDT(s) inside the section
-            item_sdts = []
-            for nested in section_content.iter(f'{w}sdt'):
-                npr = nested.find(f'{w}sdtPr')
-                if npr is None:
-                    continue
-                if any(True for _ in npr.iter(f'{w15}repeatingSectionItem')):
-                    item_sdts.append(nested)
-
-            if not item_sdts:
-                print(f"   ❌ No repeatingSectionItem found in {section_name}")
-                return xml_content, 0
-
-            # Use the first item SDT as the template
-            template_item_sdt = item_sdts[0]
-            template_parent = parent_map.get(template_item_sdt)
-            if template_parent is None:
-                print(f"   ❌ Could not locate parent for repeating item in {section_name}")
-                return xml_content, 0
-
-            print(f"   ✅ Found repeatingSectionItem template for {section_name}")
-
-            # Remove all existing repeating item SDTs under the parent
-            for node in list(template_parent):
-                # Remove siblings that are repeating items
-                if node.tag == f'{w}sdt':
-                    pr = node.find(f'{w}sdtPr')
-                    if pr is not None and any(True for _ in pr.iter(f'{w15}repeatingSectionItem')):
-                        template_parent.remove(node)
-
-            # Create a clone for each item and set row controls
-            for idx, item in enumerate(items, start=1):
-                print(f"   🔄 Processing item {idx}: {item}")
-                clone = copy.deepcopy(template_item_sdt)
-
-                content = clone.find(f'{w}sdtContent')
-                if content is None:
-                    continue
-
-                # Set values within this clone's subtree
-                material = str(item.get('material', ''))
-                qty = str(item.get('quantity', ''))
-                unit = float(item.get('unitPrice', 0))
-                total = float(item.get('quantity', 0)) * float(item.get('unitPrice', 0))
-
-                self._set_control_value_in_element(content, 'Module', material)
-                self._set_control_value_in_element(content, 'Aantal', qty)
-                if section_name == 'items1':
-                    self._set_control_value_in_element(content, 'éénmalige setupkost', f"€{unit:.2f}")
-                    self._set_control_value_in_element(content, 'calctotaalsetup', f"€{total:.2f}")
-                else:
-                    self._set_control_value_in_element(content, 'Jaarlijks', f"€{unit:.2f}")
-                    self._set_control_value_in_element(content, 'calctotaaljaarlijks', f"€{total:.2f}")
-
-                template_parent.append(clone)
-                changes_made += 1
-
-            # Convert back to string, preserving XML declaration if present
-            modified = ET.tostring(root, encoding='unicode')
-            if xml_decl and not modified.startswith('<?xml'):
-                modified = xml_decl + modified
-
-            print(f"   ✅ Replaced section {section_name} with {len(items)} items")
-            return modified, changes_made
-
-        except Exception as e:
-            print(f"   ⚠️  Error duplicating section {section_name}: {e}")
-            import traceback
-            traceback.print_exc()
-            return xml_content, 0
-
-    def _set_control_value_in_element(self, element, control_name, value):
-        """Set the text of a content control (by alias or tag) within the given element subtree."""
-        w = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
-        updated = False
-        for sdt in element.iter(f'{w}sdt'):
-            try:
-                pr = sdt.find(f'{w}sdtPr')
-                if pr is None:
-                    continue
-                name = None
-                alias = pr.find(f'{w}alias')
-                if alias is not None:
-                    name = alias.get(f'{w}val')
-                if not name:
-                    tag = pr.find(f'{w}tag')
-                    if tag is not None:
-                        name = tag.get(f'{w}val')
-                if name != control_name:
-                    continue
-                content = sdt.find(f'{w}sdtContent')
-                if content is None:
-                    continue
-                # Find first text run and set it
-                t_elem = None
-                for t in content.iter(f'{w}t'):
-                    t_elem = t
-                    break
-                if t_elem is None:
-                    # Create a new paragraph/run/text if needed
-                    p = ET.SubElement(content, f'{w}p')
-                    r = ET.SubElement(p, f'{w}r')
-                    t_elem = ET.SubElement(r, f'{w}t')
-                t_elem.text = str(value)
-                updated = True
-            except Exception:
-                continue
-        return updated
-    
-    def replace_control_in_xml(self, xml_content, control_name, value):
-        """Replace a specific content control in XML content."""
-        
-        import re
-        
-        print(f"       🔍 Looking for control: {control_name} with value: {value}")
-        
-        # Pattern to find content control by alias or tag
-        patterns = [
-            rf'(<w:sdt[^>]*>.*?<w:alias w:val="{re.escape(control_name)}"[^>]*/>.*?<w:sdtContent>.*?<w:t[^>]*>)[^<]*(</w:t>.*?</w:sdtContent>.*?</w:sdt>)',
-            rf'(<w:sdt[^>]*>.*?<w:tag w:val="{re.escape(control_name)}"[^>]*/>.*?<w:sdtContent>.*?<w:t[^>]*>)[^<]*(</w:t>.*?</w:sdtContent>.*?</w:sdt>)'
-        ]
-        
-        found = False
-        for i, pattern in enumerate(patterns):
-            match = re.search(pattern, xml_content, re.DOTALL)
-            if match:
-                print(f"       ✅ Found control {control_name} using pattern {i+1}")
-                replacement = match.group(1) + str(value) + match.group(2)
-                xml_content = xml_content.replace(match.group(0), replacement)
-                found = True
-                break
-        
-        if not found:
-            print(f"       ❌ Control {control_name} not found in XML")
-        
-        return xml_content
     
     def calculate_values(self, data):
         """Calculate all the values needed for the controls."""

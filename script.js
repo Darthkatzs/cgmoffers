@@ -2,7 +2,6 @@ class QuotationGenerator {
     constructor() {
         this.initializeEventListeners();
         this.updateTotals();
-        this.addAutoFillButton();
     }
 
     initializeEventListeners() {
@@ -213,101 +212,9 @@ class QuotationGenerator {
             alert(`Er is een fout opgetreden bij het genereren van de offerte: ${error.message}`);
         }
     }
-
-    addAutoFillButton() {
-        console.log('🔧 Adding auto-fill button...');
-        
-        // Create auto-fill button
-        const autoFillButton = document.createElement('button');
-        autoFillButton.type = 'button';
-        autoFillButton.textContent = '🎯 Auto-Fill Test Data';
-        autoFillButton.className = 'auto-fill-btn';
-        autoFillButton.style.cssText = `
-            background: #28a745 !important;
-            color: white !important;
-            border: none !important;
-            padding: 10px 20px !important;
-            border-radius: 5px !important;
-            cursor: pointer !important;
-            margin: 10px 0 !important;
-            font-size: 14px !important;
-            display: block !important;
-            width: 200px !important;
-            z-index: 1000 !important;
-        `;
-        
-        // Try multiple insertion methods
-        const header = document.querySelector('header');
-        const form = document.querySelector('form');
-        
-        if (header) {
-            console.log('✅ Header found, inserting button after header');
-            header.insertAdjacentElement('afterend', autoFillButton);
-        } else if (form) {
-            console.log('✅ Form found, inserting button before form');
-            form.insertAdjacentElement('beforebegin', autoFillButton);
-        } else {
-            console.log('⚠️ No header or form found, appending to body');
-            document.body.appendChild(autoFillButton);
-        }
-        
-        autoFillButton.addEventListener('click', () => {
-            console.log('🎯 Auto-fill button clicked');
-            this.fillTestData();
-        });
-        
-        console.log('✅ Auto-fill button added successfully');
-    }
-
-    fillTestData() {
-        // Fill company information
-        document.getElementById('companyName').value = 'Test Company BV';
-        document.getElementById('contactName').value = 'John Doe';
-        document.getElementById('address').value = 'Teststraat 123';
-        document.getElementById('postalCode').value = '1234 AB';
-        document.getElementById('city').value = 'Amsterdam';
-        document.getElementById('companyId').value = '12345678';
-        document.getElementById('description').value = 'Test quotation for development purposes';
-
-        // Clear existing cost rows
-        document.getElementById('oneTimeCosts').innerHTML = '';
-        document.getElementById('recurringCosts').innerHTML = '';
-
-        // Add test one-time costs
-        this.addTestCostRow('oneTimeCosts', 'Setup & Configuration', 1, 500);
-        this.addTestCostRow('oneTimeCosts', 'Initial Training', 2, 250);
-
-        // Add test recurring costs  
-        this.addTestCostRow('recurringCosts', 'Monthly Support', 1, 150);
-        this.addTestCostRow('recurringCosts', 'Software License', 3, 75);
-
-        // Update totals
-        this.updateTotals();
-        
-        console.log('✅ Test data filled');
-    }
-
-    addTestCostRow(containerId, material, quantity, unitPrice) {
-        const container = document.getElementById(containerId);
-        const newRow = document.createElement('div');
-        newRow.className = 'cost-row';
-        
-        newRow.innerHTML = `
-            <input type="text" class="material-name" placeholder="Materiaal/Service naam" value="${material}">
-            <input type="number" class="quantity" placeholder="1" min="1" value="${quantity}">
-            <input type="number" class="unit-price" placeholder="0.00" min="0" step="0.01" value="${unitPrice}">
-            <input type="number" class="total-price" readonly value="${quantity * unitPrice}">
-            <button type="button" class="remove-row">×</button>
-        `;
-        
-        container.appendChild(newRow);
-        this.attachRowEventListeners();
-    }
 }
 
 // Initialize the application when the page loads
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 QuotationGenerator loading...');
     new QuotationGenerator();
-    console.log('✅ QuotationGenerator initialized');
 });
