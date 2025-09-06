@@ -341,17 +341,22 @@ class ContentControlProcessor:
             section_content = match.group(2)
             section_end = match.group(3)
             
-            # Find the repeating section item template within the content
-            item_pattern = r'(<w:sdt[^>]*>.*?repeatingSectionItem.*?<w:sdtContent>)(.*?)(</w:sdtContent>.*?</w:sdt>)'
+            # The repeatingSectionItem is at the root level of section_content
+            # Look for the SDT that contains repeatingSectionItem
+            item_pattern = r'<w:sdt[^>]*>.*?<w15:repeatingSectionItem/>.*?<w:sdtContent>(.*?)</w:sdtContent>.*?</w:sdt>'
             item_match = re.search(item_pattern, section_content, re.DOTALL)
             
             if not item_match:
                 print(f"   ❌ No repeatingSectionItem found in {section_name}")
+                # Show what we actually found for debugging
+                if 'repeatingSectionItem' in section_content:
+                    print(f"   🔍 repeatingSectionItem text found but pattern didn't match")
                 return xml_content, 0
             
             print(f"   ✅ Found repeatingSectionItem in {section_name}")
+            # The item template is the entire SDT with repeatingSectionItem
             item_template = item_match.group(0)
-            item_content = item_match.group(2)
+            item_content = item_match.group(1)
             
             # Generate content for each item
             new_items = []
