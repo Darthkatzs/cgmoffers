@@ -19,8 +19,8 @@ class ContentControlProcessor:
         with open('control_mappings.json', 'r') as f:
             self.config = json.load(f)
         self.controls = self.config['controls']
-        # Feature flag: temporarily disable repeating sections until we re-implement cleanly
-        self.enable_repeating_sections = False
+        # Feature flag: enable repeating sections with robust cloning
+        self.enable_repeating_sections = True
     
     def process_word_template(self, template_path, data, output_path):
         """Process Word template by directly manipulating content controls in XML."""
@@ -345,7 +345,7 @@ class ContentControlProcessor:
         return xml_content, changes_made
     
     def duplicate_repeating_section(self, xml_content, section_name, items):
-        """Duplicate a repeating section for each item in the data using namespace-aware XML ops."""
+        """Duplicate a repeating section for each item by cloning the entire repeatingSectionItem SDT per row."""
         changes_made = 0
         try:
             print(f"   🔍 Looking for section: {section_name}")
@@ -358,6 +358,9 @@ class ContentControlProcessor:
             root = ET.fromstring(xml_content)
             w = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
             w15 = '{http://schemas.microsoft.com/office/word/2012/wordml}'
+
+            # Parent map for removals
+            parent_map = {c: p for p in root.iter() for c in p}
 
             # 1) Find the section container SDT by its tag value
             section_sdt = None
@@ -381,72 +384,61 @@ class ContentControlProcessor:
                 print(f"   ❌ Section {section_name} has no sdtContent")
                 return xml_content, 0
 
-            # 2) Inside section, find nested SDT that has w15:repeatingSectionItem in its sdtPr
-            #    This may be nested inside mc:Choice/AlternateContent, so search recursively.
-            repeating_sdt = None
+            # 2) Find the repeatingSectionItem SDT(s) inside the section
+            item_sdts = []
             for nested in section_content.iter(f'{w}sdt'):
                 npr = nested.find(f'{w}sdtPr')
                 if npr is None:
                     continue
-                # recursive search for w15:repeatingSectionItem
-                found = any(True for _ in npr.iter(f'{w15}repeatingSectionItem'))
-                if found:
-                    repeating_sdt = nested
-                    break
+                if any(True for _ in npr.iter(f'{w15}repeatingSectionItem')):
+                    item_sdts.append(nested)
 
-            if repeating_sdt is None:
+            if not item_sdts:
                 print(f"   ❌ No repeatingSectionItem found in {section_name}")
                 return xml_content, 0
 
-            print(f"   ✅ Found repeatingSectionItem in {section_name}")
-
-            rep_content = repeating_sdt.find(f'{w}sdtContent')
-            if rep_content is None:
-                print(f"   ❌ repeatingSectionItem SDT has no sdtContent in {section_name}")
+            # Use the first item SDT as the template
+            template_item_sdt = item_sdts[0]
+            template_parent = parent_map.get(template_item_sdt)
+            if template_parent is None:
+                print(f"   ❌ Could not locate parent for repeating item in {section_name}")
                 return xml_content, 0
 
-            # Take the first child(ren) as template nodes
-            template_children = list(rep_content)
-            if not template_children:
-                print(f"   ❌ repeatingSectionItem sdtContent is empty in {section_name}")
-                return xml_content, 0
+            print(f"   ✅ Found repeatingSectionItem template for {section_name}")
 
-            # We'll use the entire current content as a template block
-            template_block = [copy.deepcopy(child) for child in template_children]
+            # Remove all existing repeating item SDTs under the parent
+            for node in list(template_parent):
+                # Remove siblings that are repeating items
+                if node.tag == f'{w}sdt':
+                    pr = node.find(f'{w}sdtPr')
+                    if pr is not None and any(True for _ in pr.iter(f'{w15}repeatingSectionItem')):
+                        template_parent.remove(node)
 
-            # Clear current contents
-            for child in list(rep_content):
-                rep_content.remove(child)
-
-            # Build rows for each item
+            # Create a clone for each item and set row controls
             for idx, item in enumerate(items, start=1):
                 print(f"   🔄 Processing item {idx}: {item}")
-                # Duplicate the template block
-                clones = [copy.deepcopy(node) for node in template_block]
-                # Wrap in a temporary parent to easily run setters
-                temp_parent = ET.Element('temp')
-                for c in clones:
-                    temp_parent.append(c)
+                clone = copy.deepcopy(template_item_sdt)
 
-                # Set values within this block
+                content = clone.find(f'{w}sdtContent')
+                if content is None:
+                    continue
+
+                # Set values within this clone's subtree
                 material = str(item.get('material', ''))
                 qty = str(item.get('quantity', ''))
                 unit = float(item.get('unitPrice', 0))
                 total = float(item.get('quantity', 0)) * float(item.get('unitPrice', 0))
 
-                self._set_control_value_in_element(temp_parent, 'Module', material)
-                self._set_control_value_in_element(temp_parent, 'Aantal', qty)
+                self._set_control_value_in_element(content, 'Module', material)
+                self._set_control_value_in_element(content, 'Aantal', qty)
                 if section_name == 'items1':
-                    self._set_control_value_in_element(temp_parent, 'éénmalige setupkost', f"€{unit:.2f}")
-                    self._set_control_value_in_element(temp_parent, 'calctotaalsetup', f"€{total:.2f}")
+                    self._set_control_value_in_element(content, 'éénmalige setupkost', f"€{unit:.2f}")
+                    self._set_control_value_in_element(content, 'calctotaalsetup', f"€{total:.2f}")
                 else:
-                    self._set_control_value_in_element(temp_parent, 'Jaarlijks', f"€{unit:.2f}")
-                    self._set_control_value_in_element(temp_parent, 'calctotaaljaarlijks', f"€{total:.2f}")
+                    self._set_control_value_in_element(content, 'Jaarlijks', f"€{unit:.2f}")
+                    self._set_control_value_in_element(content, 'calctotaaljaarlijks', f"€{total:.2f}")
 
-                # Append clones back into repeating content
-                for c in list(temp_parent):
-                    rep_content.append(c)
-
+                template_parent.append(clone)
                 changes_made += 1
 
             # Convert back to string, preserving XML declaration if present
