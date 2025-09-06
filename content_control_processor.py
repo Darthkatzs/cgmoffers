@@ -19,6 +19,8 @@ class ContentControlProcessor:
         with open('control_mappings.json', 'r') as f:
             self.config = json.load(f)
         self.controls = self.config['controls']
+        # Feature flag: enable repeating sections (safe after analysis and fixes)
+        self.enable_repeating_sections = True
     
     def process_word_template(self, template_path, data, output_path):
         """Process Word template by directly manipulating content controls in XML."""
@@ -83,9 +85,10 @@ class ContentControlProcessor:
         
         changes_made = 0
         
-        # First handle repeating sections
-        xml_content, repeating_changes = self.process_repeating_sections(xml_content, data)
-        changes_made += repeating_changes
+        # First handle repeating sections (disabled via feature flag while we analyze)
+        if self.enable_repeating_sections:
+            xml_content, repeating_changes = self.process_repeating_sections(xml_content, data)
+            changes_made += repeating_changes
         
         try:
             # Parse XML with namespace handling
@@ -171,9 +174,9 @@ class ContentControlProcessor:
                         
                         # If we found a control name
                         if control_name:
+                            # Always skip overriding row controls inside repeating sections
                             inside_repeating = is_inside_repeating_section(sdt)
                             if inside_repeating and control_name in row_fields:
-                                # Skip overriding values for repeating row controls
                                 print(f"      ⏭️  Skipping control '{control_name}' inside repeating section")
                                 continue
                             # Track which instance this is
@@ -379,12 +382,15 @@ class ContentControlProcessor:
                 return xml_content, 0
 
             # 2) Inside section, find nested SDT that has w15:repeatingSectionItem in its sdtPr
+            #    This may be nested inside mc:Choice/AlternateContent, so search recursively.
             repeating_sdt = None
             for nested in section_content.iter(f'{w}sdt'):
                 npr = nested.find(f'{w}sdtPr')
                 if npr is None:
                     continue
-                if npr.find(f'{w15}repeatingSectionItem') is not None:
+                # recursive search for w15:repeatingSectionItem
+                found = any(True for _ in npr.iter(f'{w15}repeatingSectionItem'))
+                if found:
                     repeating_sdt = nested
                     break
 
